@@ -1,0 +1,11 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><title>Prueba real de MediaPipe</title><body><h1>Prueba real de MediaPipe</h1><p id="result" role="status">Cargando modelos reales, sin encender la cámara…</p><canvas id="input" width="320" height="240"></canvas><script type="module">
+const result=document.querySelector('#result');
+const worker=new Worker('../tracker.js');
+const timer=setTimeout(()=>finish('ERROR: tiempo de carga agotado.'),90000);
+function finish(text){clearTimeout(timer);result.textContent=text;worker.terminate();}
+worker.onerror=e=>finish('ERROR: '+e.message);
+let frames=0;
+async function send(){const canvas=document.querySelector('canvas');const ctx=canvas.getContext('2d');ctx.fillStyle='#263a26';ctx.fillRect(0,0,320,240);const bitmap=await createImageBitmap(canvas);worker.postMessage({type:'frame',bitmap,time:performance.now()},[bitmap]);}
+worker.onmessage=async({data})=>{try{if(data.type==='ready'){result.textContent='Modelos cargados. Procesando dos fotogramas…';await send();}else if(data.type==='result'){if(!Array.isArray(data.hands)||!Array.isArray(data.faces)||!Array.isArray(data.poseWorld))throw Error('Respuesta inválida');if(++frames===2)finish('OK: modelos de manos, rostro y pose cargados; dos fotogramas procesados en el worker.');else await send();}else if(data.type==='error')finish('ERROR: '+data.message);}catch(e){finish('ERROR: '+e.message);}};
+worker.postMessage({type:'init'});
+</script></body></html>
