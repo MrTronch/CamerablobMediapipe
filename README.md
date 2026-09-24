@@ -49,3 +49,40 @@ La forma Automática alterna círculos y cuadrados cada intervalo aleatorio de 5
 Para probar el pitch, encuadra hombros, codos y muñecas y mueve las manos lateralmente, arriba/abajo y hacia la cámara. La prueba auditiva comparativa con el Python original queda pendiente; el motor web no garantiza equivalencia sonora exacta.
 
 La ampliación global va de 1,25× a 4×, inicialmente 2,2×. Dedos, mejillas, nariz y comisuras reciben una fracción menor del zoom. Las muñecas tienen mayor prioridad de aparición que los dedos (solo índice y medio). Los sonidos de bloques de mano toman la posición de su muñeca al nacer. Se añaden hombros, codos y caderas visibles, además de los bloques por movimiento de imagen. Los anclajes corporales y faciales siguen sus puntos detectados.
+
+
+## Cámara, pantalla completa y compensación de movimiento
+
+Cada inicio solicita frontal (sin recordar la trasera). El espejo sigue la orientación declarada por el dispositivo: frontal activado y trasera desactivado. En equipos sin información de orientación se consulta el nombre de la cámara y finalmente la preferencia solicitada. Si no existe cámara frontal o el navegador no admite esa restricción, se permite la cámara disponible. Ninguna web puede garantizar una cámara que el sistema no expone.
+
+Los cambios de cámara liberan el stream anterior, limpian bloques y memoria de movimiento y descartan resultados pendientes de otra sesión. Las primeras seis muestras de análisis estabilizan el detector. No se usan sensores ni se piden permisos adicionales de movimiento.
+
+Pantalla completa muestra únicamente el canvas y Salir. El canvas usa cover: no se deforma, pero puede recortar bordes para llenar el viewport. El vídeo, los blobs y las líneas se escalan juntos. Resize/orientación y entrada/salida de fullscreen reinician el análisis de movimiento. El botón requiere una sesión de cámara activa.
+
+El análisis de movimiento utiliza imágenes de 80×60 a intervalos de 120 ms, hasta 48 puntos texturados, búsqueda local de parches y consenso robusto de una transformación afín. Compara el movimiento residual después de compensar desplazamiento, rotación y escala leves. Ignora nuevos bordes, tolera un píxel de cuantización durante movimiento coherente y elimina cambios uniformes de brillo. Un movimiento brusco o cambio amplio vuelve a estabilizar. Se reutilizan dos buffers de luminancia; el render conserva su resolución. La referencia de fondo es el fotograma anterior, actualizado incluso durante estabilización; no existe un modelo persistente de escena.
+
+### Parámetros en config.js
+
+| Parámetro | Inicial | Efecto al ajustar |
+|---|---:|---|
+| DEBUG | false | true muestra HUD y estados internos. Los errores útiles y la carga inicial siguen visibles fuera de fullscreen. |
+| STABILIZATION_FRAMES | 6 | Aumentar prolonga la pausa tras cambios de encuadre; unos 0,7–0,9 s normalmente. Son muestras de análisis, no frames de render. |
+| GLOBAL_MOTION_THRESHOLD | 0.65 | Movimiento mínimo en píxeles de análisis para activar tolerancia de bordes y exigir residuos agrupados. |
+| CAMERA_SHAKE_THRESHOLD | 4 | Bajarlo hace que desplazamientos menores activen reestabilización. |
+| GLOBAL_SUPPORT | 0.55 | Fracción de coincidencias coherentes requerida; además exige cobertura en tres cuadrantes. |
+| RESIDUAL_THRESHOLD | 22 | Bajarlo detecta diferencias locales menores, pero puede incrementar ruido. No sustituye la compensación. |
+| BROAD_CHANGE_FRACTION | 0.45 | Fracción de residuos que dispara pausa ante un cambio amplio. |
+| MAX_TRACKING_POINTS | 48 | Más puntos puede mejorar consenso, a costa de procesamiento. |
+| SEARCH_RADIUS | 6 | Alcance de búsqueda en píxeles de análisis. Aumentarlo cuesta más CPU. |
+| WIDTH / HEIGHT | 80 / 60 | Resolución del análisis, independiente del canvas visible. |
+| INTERVAL_MS | 120 | Intervalo entre análisis. Más alto reduce carga y puede perder movimientos rápidos. |
+
+### Validación y límites
+
+Las 15 pruebas anteriores y siete pruebas nuevas pasan: traslación global, rotación leve, objeto independiente con cámara quieta y en paneo, cambio brusco, reset y espejo. Entrada/salida de fullscreen verificadas en el navegador integrado con tests/presentation.html. No equivalen a probar cámara frontal/trasera y rendimiento en un teléfono físico.
+
+En Chrome Android, comprobar con HTTPS: inicio frontal, trasera sin espejo, regreso frontal, detener/iniciar, paneo en habitación vacía, persona y objeto móvil, giro fuerte, rotación del teléfono y fullscreen. El navegador exige pulsación para fullscreen y puede impedirlo en iframes sin permiso. No se bloquea orientación. No se garantiza 60 FPS: depende del hardware, temperatura, resolución y los tres modelos de MediaPipe.
+
+Límites del estimador: escena sin textura, desenfoque fuerte, paralaje de objetos cercanos, cambios de luz locales y una persona ocupando casi toda la imagen pueden confundirse con movimiento global. En cambios amplios se prioriza una pausa breve; puede omitir temporalmente movimiento real. Los landmarks de MediaPipe permanecen independientes de la compensación, pero la creación de todos los nuevos blobs se pausa durante estabilización. No se promete eliminación absoluta de falsos positivos.
+
+Archivos de esta revisión: modificados app.js, tracker.js, index.html, style.css y README.md; añadidos config.js, motion.js, presentation.js, tests/motion.test.mjs y tests/presentation.html. La carpeta 00 backup no se modifica. No se ha actualizado automáticamente GitHub Pages.
