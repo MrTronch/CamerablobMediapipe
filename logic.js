@@ -11,7 +11,7 @@ export function crop(x,y,r,zoom,width,height){const side=Math.min(2*r/zoom,width
 export function shouldInvert(blob,zones){return blob.kind!=='face'&&zones.some(h=>h.peace&&blob.x>=h.left&&blob.x<=h.right&&blob.y>=h.top&&blob.y<=h.bottom);}
 
 export function randomLife(maximum,random=Math.random){const max=clamp(maximum,2,6);return Math.max(2,max-3)+random()*(max-Math.max(2,max-3));}
-export function hasSpace(point,blobs,now,width,height){const scale=Math.min(width,height);return blobs.every(b=>{if(point.anchor&&point.anchor===b.anchor)return false;if(point.kind==='face'&&b.kind==='face')return Math.hypot((point.x-b.x)*width,(point.y-b.y)*height)>18*scale/480;const age=(now-b.born)/1000;const radius=growth(age,b.life,3).radius;const gap=Math.max(42,radius*.9+12)*scale/480;return Math.hypot((point.x-b.x)*width,(point.y-b.y)*height)>gap;});}
+export function hasSpace(point,blobs,now,width,height){const scale=Math.min(width,height);if(isEye(point)&&blobs.some(isEye))return false;return blobs.every(b=>{if(point.anchor&&point.anchor===b.anchor)return false;if(point.kind==='face'&&b.kind==='face')return Math.hypot((point.x-b.x)*width,(point.y-b.y)*height)>18*scale/480;const age=(now-b.born)/1000;const radius=growth(age,b.life,3).radius;const gap=Math.max(42,radius*.9+12)*scale/480;return Math.hypot((point.x-b.x)*width,(point.y-b.y)*height)>gap;});}
 // Ratio of wrist separation to the shoulder width plus both arm bone lengths.
 export function armOpenness(world){const ids=[11,12,13,14,15,16];if(!world||ids.some(i=>!world[i]||(world[i].visibility??0)<.6))return null;const d=(a,b)=>Math.hypot(world[a].x-world[b].x,world[a].y-world[b].y,world[a].z-world[b].z);const span=d(11,12)+d(11,13)+d(13,15)+d(12,14)+d(14,16);return span>.01?clamp(d(15,16)/span,0,1):null;}
 
@@ -37,4 +37,17 @@ export function bodyAudio(point,image,world,aspect=4/3){
 }
 
 export function blobZoom(blob,maximum){const amount=clamp(maximum,1.25,4);const factor=blob.part==='finger'?.3:blob.part==='secondary-face'?.45:blob.part==='body'?.65:1;return 1+(amount-1)*factor;}
-export function spawnWeight(point){return point.part==='wrist'?8:point.part==='finger'?.3:point.part==='primary-face'?4:point.part==='secondary-face'?2:point.part==='body'?3:1;}
+export function spawnWeight(point){if(isEye(point))return .25;return point.part==='wrist'?8:point.part==='finger'?.3:point.part==='primary-face'?4:point.part==='secondary-face'?2:point.part==='body'?3:1;}
+
+export const isEye = p => p.anchor==='eye-left'||p.anchor==='eye-right';
+export function eyeZone(point,facePoints){
+ if(isEye(point))return point.anchor;
+ const eyes=facePoints.filter(isEye);if(eyes.length!==2)return null;
+ const radius=Math.hypot(eyes[0].x-eyes[1].x,eyes[0].y-eyes[1].y)*.22;
+ return eyes.find(e=>Math.hypot(point.x-e.x,point.y-e.y)<radius)?.anchor??null;
+}
+export function handMotionCandidates(points,motion,faceCount,handCount){
+ const blobsEnabled=faceCount>0||handCount>0;
+ return [...points.filter(p=>p.kind!=='hand'||(blobsEnabled&&motion.some(m=>Math.hypot(m.x-p.x,m.y-p.y)<.16))),...motion];
+}
+export function excludePairedEyes(blobs,facePoints){let eyeKept=false;return blobs.filter(b=>{if(!eyeZone(b,facePoints))return true;if(eyeKept)return false;eyeKept=true;return true;});}

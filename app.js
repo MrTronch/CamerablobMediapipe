@@ -1,13 +1,13 @@
 import {DEBUG,MOTION} from './config.js';
 import {MotionDetector} from './motion.js';
 import {setupPresentation,mirrorForCamera} from './presentation.js';
-import {clamp,isPeace,growth,crop,shouldInvert,randomLife,hasSpace,armOpenness,nextShape,followFace,bodyAudio,blobZoom,spawnWeight} from './logic.js';
+import {clamp,isPeace,growth,crop,shouldInvert,randomLife,hasSpace,armOpenness,nextShape,followFace,bodyAudio,blobZoom,spawnWeight,eyeZone,handMotionCandidates,excludePairedEyes} from './logic.js';
 import {Sampler} from './audio.js';
 const $=id=>document.getElementById(id),video=$('video'),canvas=$('view'),ctx=canvas.getContext('2d'),sampler=new Sampler();
 const source=document.createElement('canvas'),sc=source.getContext('2d');
 const motion=document.createElement('canvas');motion.width=MOTION.WIDTH;motion.height=MOTION.HEIGHT;const mc=motion.getContext('2d',{willReadFrequently:true});
 let stream,worker,ready=false,running=false,busy=false,starting=false,session=0,facing='user',blobs=[],points=[],handZones=[],lastInfer=0,lastMotion=0,lastSpawn=0,lastSound=0,lastMouth=0,lastResult=0,lastFrame=0,fps=0,handCount=0,faceCount=0,inferenceInterval=100;
-let changingCamera=false,trackerTimer;
+let changingCamera=false,trackerTimer,eyeCooldownUntil=0;
 const detector=new MotionDetector();
 let motionPoints=[];
 function resetMotionDetection(){detector.reset();motionPoints=[];lastMotion=0;}
@@ -24,7 +24,7 @@ $('menuToggle').onclick=()=>setMenu(!$('controls').hidden);
 mobileMenu.addEventListener('change',event=>setMenu(event.matches));
 $('mirror').onchange=()=>resetTracking();
 for(const [id,suffix] of [['count',''],['life',' s'],['zoom','×'],['density','%'],['volume','%']])$(id).oninput=()=>{$(`${id}Value`).value=$(id).value+suffix;if(id==='volume')sampler.volume(+$(id).value/100);};
-function resetTracking(){busy=false;bodyImage=bodyWorld=null;bodyAt=0;autoShape={shape:'circle',until:performance.now()+5000+Math.random()*3000};blobs=[];points=[];resetMotionDetection();handCount=faceCount=0;handZones=[];lastResult=0;sampler.setOpenness(null);}
+function resetTracking(){eyeCooldownUntil=0;busy=false;bodyImage=bodyWorld=null;bodyAt=0;autoShape={shape:'circle',until:performance.now()+5000+Math.random()*3000};blobs=[];points=[];resetMotionDetection();handCount=faceCount=0;handZones=[];lastResult=0;sampler.setOpenness(null);}
 function startTracker(){
  return new Promise((resolve,reject)=>{
   worker=new Worker('./tracker.js');const activeWorker=worker;const timer=trackerTimer=setTimeout(()=>{activeWorker.terminate();reject(Error('La carga del seguimiento agotó el tiempo. Comprueba la conexión y vuelve a iniciar.'));},90000);
@@ -88,16 +88,18 @@ function frame(now){
  sc.save();if($('mirror').checked){sc.translate(w,0);sc.scale(-1,1);}sc.drawImage(video,0,0,w,h);sc.restore();ctx.drawImage(source,0,0);
  if(now-lastMotion>MOTION.INTERVAL_MS)motionPoints=movement(now);
  if(now-lastResult>650){points=[];handZones=[];handCount=faceCount=0;sampler.setOpenness(null);}
- const candidates=detector.blocked?[]:[...points.map(displayPoint),...motionPoints];
+ const facePoints=points.filter(p=>p.kind==='face').map(displayPoint);
+ const candidates=detector.blocked?[]:handMotionCandidates(points.map(displayPoint),motionPoints,faceCount,handCount);
  for(const b of blobs)if(b.anchor)followFace(b,candidates,now-lastFrame);
  if($('shape').value==='auto')autoShape=nextShape(autoShape,now);
  const activeShape=$('shape').value==='auto'?autoShape.shape:$('shape').value;
  if(ready&&!busy&&now-lastInfer>inferenceInterval){busy=true;lastInfer=now;const token=session;createImageBitmap(video,{resizeWidth:Math.min(w,480),resizeHeight:Math.round(h*Math.min(w,480)/w)}).then(bitmap=>{if(token!==session||!running){bitmap.close();return;}worker.postMessage({type:'frame',bitmap,time:now,epoch:token},[bitmap]);}).catch(()=>{busy=false;});}
  blobs=blobs.filter(b=>(now-b.born)/1000<b.life).slice(-+$('count').value);
+ blobs=excludePairedEyes(blobs,facePoints);
  if(candidates.length&&now-lastSpawn>100&&blobs.length<+$('count').value){
   let added=0;
   const ordered=candidates.map(p=>({p,key:-Math.log(Math.max(.000001,Math.random()))/spawnWeight(p)})).sort((a,b)=>a.key-b.key).map(item=>item.p);
-  for(let i=0;i<ordered.length&&added<3&&blobs.length<+$('count').value;i++){const p=ordered[i];if(hasSpace(p,blobs,now,w,h)){blobs.push({...p,born:now,life:randomLife(+$('life').value)});added++;}}
+  for(let i=0;i<ordered.length&&added<3&&blobs.length<+$('count').value;i++){const p=ordered[i],eye=eyeZone(p,facePoints);if(eye&&(now<eyeCooldownUntil||blobs.some(b=>eyeZone(b,facePoints))))continue;if(hasSpace(p,blobs,now,w,h)){const life=randomLife(+$('life').value);blobs.push({...p,born:now,life});if(eye)eyeCooldownUntil=now+life*1000+2500;added++;}}
   lastSpawn=now;
  }
 

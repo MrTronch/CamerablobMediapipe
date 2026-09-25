@@ -8,4 +8,4 @@ html:not(.debug) [data-debug]{display:none!important}
 .stage:fullscreen{width:100vw;height:100dvh;min-height:0;max-height:none;border:0;background:#000}
 .stage:fullscreen canvas{width:100%;height:100%;object-fit:cover}
 .stage:fullscreen .hud,.stage:fullscreen #welcome{display:none!important}
-#exitFullscreen{position:absolute;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));z-index:10;background:#10181080;border-color:#7bff6266;font-size:14px}
+#exitFullscreen{position:absolute;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));z-index:10;width:44px;height:44px;min-height:44px;padding:0;display:grid;place-items:center;background:transparent;border:0;color:#7bff62b3;font-size:20px;line-height:1;text-shadow:0 1px 3px #000}
