@@ -1,0 +1,21 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><base href="../"><meta name="viewport" content="width=device-width"><title>Prueba de audio reactivo</title><style>body{background:#0f0f0f;color:#d1d1d1;font:16px Arial;padding:30px}button{padding:16px;background:#23f415;border:0}output{display:block;padding:20px 0}</style><h1>Prueba del sonido de salida</h1><p>Reproduce un sample del instrumento y comprueba la lectura real del analizador. No usa cámara ni micrófono.</p><button id="test">Probar sample</button><output id="result">En espera</output><script type="module">
+import {Sampler} from '../audio.js';
+const sampler=new Sampler(),button=document.getElementById('test'),result=document.getElementById('result');
+button.onclick=async()=>{
+ button.disabled=true;result.textContent='Preparando sample…';
+ try{
+  await sampler.unlock();await sampler.load();sampler.muted=false;sampler.volume(.65);
+  if(!sampler.play(0))throw Error('No se pudo reproducir el sample');
+  const until=performance.now()+1800;let peak=0,bass=0,treble=0;
+  const poll=()=>{
+   const data=sampler.reaction();peak=Math.max(peak,data.level);bass=Math.max(bass,data.bass);treble=Math.max(treble,data.treble);
+   result.textContent=`Midiendo: nivel ${peak.toFixed(3)} / graves ${bass.toFixed(3)} / agudos ${treble.toFixed(3)}`;
+   if(performance.now()<until){requestAnimationFrame(poll);return;}
+   sampler.muted=true;sampler.volume(.65);
+   const muted=sampler.reaction().level;
+   result.textContent=`${peak>0&&muted===0?'PASS':'FAIL'} — pico ${peak.toFixed(3)}, graves ${bass.toFixed(3)}, agudos ${treble.toFixed(3)}, silenciado ${muted}`;
+   sampler.stop();button.disabled=false;
+  };requestAnimationFrame(poll);
+ }catch(e){result.textContent='ERROR: '+e.message;button.disabled=false;}
+};
+</script></html>

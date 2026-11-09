@@ -1,0 +1,1 @@
+Sube el contenido de esta carpeta a la raíz de CamerablobMediapipe. Reemplaza todos los archivos, incluyendo los módulos JavaScript y assets. No necesita build. Después de publicar, recarga con Ctrl + F5 y reinicia la cámara.

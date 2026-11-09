@@ -5,7 +5,7 @@ export function isPeace(h){
   const extended=(tip,pip,mcp)=>distance(h[tip],h[0])>distance(h[pip],h[0])*1.12&&distance(h[tip],h[mcp])>distance(h[pip],h[mcp])*1.3;
   return extended(8,6,5)&&extended(12,10,9)&&!extended(16,14,13)&&!extended(20,18,17)&&distance(h[8],h[12])>distance(h[5],h[17])*.22;
 }
-export function growth(age,life,maxZoom){const t=clamp(age/life,0,1);return {radius:8+60*Math.pow(t,1.15),zoom:1+(maxZoom-1)*Math.pow(t,.8),alpha:age<life?Math.min(1,age*5):0};}
+export function growth(age,life,maxZoom){const t=clamp(age/life,0,1);return {radius:6+42*Math.pow(t,1.15),zoom:1+(maxZoom-1)*Math.pow(t,.8),alpha:age<life?Math.min(1,age*5):0};}
 export function crop(x,y,r,zoom,width,height){const side=Math.min(2*r/zoom,width,height);return {x:clamp(x-side/2,0,width-side),y:clamp(y-side/2,0,height-side),side};}
 
 export function shouldInvert(blob,zones){return blob.kind!=='face'&&zones.some(h=>h.peace&&blob.x>=h.left&&blob.x<=h.right&&blob.y>=h.top&&blob.y<=h.bottom);}

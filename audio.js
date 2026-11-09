@@ -1,12 +1,20 @@
+import {audioFeatures} from './reactive.js';
 export class Sampler{
  constructor(){this.buffers=[];this.voices=new Set();this.muted=false;this.openness=0;this.bag=[];this.lastSample=-1;}
  async unlock(){
-  if(!this.ctx){this.ctx=new(window.AudioContext||window.webkitAudioContext)();this.master=this.ctx.createGain();this.master.gain.value=.65;const limiter=this.ctx.createDynamicsCompressor();this.master.connect(limiter);limiter.connect(this.ctx.destination);
+  if(!this.ctx){this.ctx=new(window.AudioContext||window.webkitAudioContext)();this.master=this.ctx.createGain();this.master.gain.value=.65;const limiter=this.ctx.createDynamicsCompressor();this.master.connect(limiter);this.analyser=this.ctx.createAnalyser();this.analyser.fftSize=1024;this.analyser.smoothingTimeConstant=.65;
+   this.waveform=new Float32Array(this.analyser.fftSize);this.spectrum=new Uint8Array(this.analyser.frequencyBinCount);
+   limiter.connect(this.analyser);this.analyser.connect(this.ctx.destination);
    // Original effect: eight discrete echoes spaced 120 ms apart.
    this.reverb=this.ctx.createConvolver();this.reverb.normalize=false;const impulse=this.ctx.createBuffer(2,Math.ceil(this.ctx.sampleRate*.97),this.ctx.sampleRate);
    for(let c=0;c<2;c++){const a=impulse.getChannelData(c);for(let i=0;i<8;i++)a[Math.round(this.ctx.sampleRate*.12*(i+1))]=.6*.75**i;}
    this.reverb.buffer=impulse;this.reverbGain=this.ctx.createGain();this.reverbGain.gain.value=.25;this.reverb.connect(this.reverbGain);this.reverbGain.connect(this.master);
   }await this.ctx.resume();
+ }
+ reaction(){
+  if(!this.analyser||this.ctx.state!=='running'||this.muted)return {level:0,bass:0,treble:0};
+  this.analyser.getFloatTimeDomainData(this.waveform);this.analyser.getByteFrequencyData(this.spectrum);
+  return audioFeatures(this.waveform,this.spectrum,this.ctx.sampleRate,this.analyser.fftSize);
  }
  setOpenness(value){this.openness+=((value??0)-this.openness)*.25;if(this.reverbGain)this.reverbGain.gain.setTargetAtTime(.25+this.openness*1.1,this.ctx.currentTime,.12);}
  async load(){if(this.buffers.length===5)return;this.buffers=await Promise.all([1,2,3,4,5].map(async i=>{const r=await fetch(`assets/sound${i}.wav`);if(!r.ok)throw Error(`No se pudo cargar sound${i}.wav`);return this.ctx.decodeAudioData(await r.arrayBuffer());}));}

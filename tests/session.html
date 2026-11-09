@@ -1,0 +1,32 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><base href="../"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prueba de sesión con fuente sintética</title><link rel="stylesheet" href="style.css"><body><p>Cargando prueba…</p><script type="module">
+// Isolated fixture: exercises the actual application with a synthetic video track.
+// No camera permission and no MediaPipe download are required for lifecycle QA.
+const markup=await (await fetch('index.html')).text();
+const page=new DOMParser().parseFromString(markup,'text/html');
+document.body.replaceChildren(...[...page.body.children].filter(el=>!['SCRIPT','NOSCRIPT'].includes(el.tagName)));
+const input=document.createElement('canvas');input.width=1280;input.height=720;const ctx=input.getContext('2d');
+function draw(now){ctx.fillStyle='#181020';ctx.fillRect(0,0,1280,720);ctx.strokeStyle='#a98be8';ctx.lineWidth=4;ctx.strokeRect(3,3,1274,714);ctx.beginPath();ctx.arc(640+Math.sin(now/1000)*30,360,150,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#fff';ctx.font='24px Arial';ctx.fillText('1',10,30);ctx.fillText('2',1250,30);ctx.fillText('3',10,710);ctx.fillText('4',1250,710);requestAnimationFrame(draw);}requestAnimationFrame(draw);
+const stream=input.captureStream(20);
+const proof=document.createElement('output');proof.id='session-proof';proof.style.cssText='display:block;padding:12px;background:#181020;color:white';document.querySelector('footer').append(proof);
+let hiddenEvents=0;
+function showProof(){proof.textContent=`${document.hidden?'hidden':'visible'} / hidden events: ${hiddenEvents} / track: ${stream.getVideoTracks()[0].readyState} / stopped: ${document.getElementById('stop').disabled}`;}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)hiddenEvents++;setTimeout(showProof,0);});setInterval(showProof,300);
+Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>stream,enumerateDevices:async()=>[{kind:'videoinput',deviceId:'synthetic',label:'Fuente sintética 1280×720'}],addEventListener(){}}});
+let frameHands=true;
+const toggleHands=document.createElement('button');toggleHands.textContent='Ocultar manos de prueba';document.querySelector('footer').append(toggleHands);
+toggleHands.onclick=()=>{frameHands=!frameHands;toggleHands.textContent=frameHands?'Ocultar manos de prueba':'Mostrar manos de prueba';};
+function testFace(){const f=Array.from({length:468},()=>({x:.5,y:.5,z:0,visibility:0}));for(const [i,x,y]of [[234,.32,.5],[454,.68,.5],[10,.5,.2],[152,.5,.8],[9,.5,.3],[33,.4,.4],[133,.45,.4],[263,.6,.4],[159,.425,.39],[145,.425,.41],[13,.5,.6],[14,.5,.61]])Object.assign(f[i],{x,y});return f;}
+function testHands(){return [.25,.75].map(x=>{const h=Array.from({length:21},()=>({x,y:.7,z:0,visibility:0}));h[4]={x,y:.7,visibility:0};h[8]={x,y:.3,visibility:0};h[5]={x:x-.05,y:.65,visibility:0};h[17]={x:x+.05,y:.65,visibility:0};return h;});}
+const NativeWorker=window.Worker;
+window.Worker=class {constructor(url,options){if(String(url).includes('atmosphere-worker'))return new NativeWorker(url,options);}postMessage(data){if(data.type==='init')queueMicrotask(()=>this.onmessage?.({data:{type:'ready'}}));else{data.bitmap.close();queueMicrotask(()=>this.onmessage?.({data:{type:'result',hands:frameHands?testHands():[],faces:[testFace()],poseWorld:[],poseImage:[],epoch:data.epoch,time:data.time}}));}}terminate(){this.onmessage=null;}};
+document.getElementById('density').value='0';
+await import('./app.js');document.getElementById('start').disabled=false;
+const check=document.createElement('button');check.textContent='Comprobar ocultar y volver';document.querySelector('footer').append(check);
+check.onclick=()=>{
+ Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));
+ const kept=stream.getVideoTracks()[0].readyState==='live'&&!document.getElementById('stop').disabled;
+ delete document.hidden;document.dispatchEvent(new Event('visibilitychange'));
+ check.textContent=kept?'PASS: sesión conservada':'FAIL: sesión detenida';
+};
+
+</script></body></html>

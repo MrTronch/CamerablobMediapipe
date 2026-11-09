@@ -1,9 +1,12 @@
 import {DEBUG} from './config.js';
 export function setupPresentation({stage,button,exitButton,onResize,onError}){
  document.documentElement.classList.toggle('debug',DEBUG);
- const update=()=>{const active=document.fullscreenElement===stage;document.body.classList.toggle('fullscreen-active',active);exitButton.hidden=!active;onResize();};
- button.onclick=async()=>{try{if(!stage.requestFullscreen)throw Error('Este navegador no ofrece pantalla completa para esta vista.');await stage.requestFullscreen();}catch(e){onError(e.message);}};
- exitButton.onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();}catch(e){onError(e.message);}};
+ const active=()=>document.fullscreenElement===stage||stage.classList.contains('immersive');
+ const update=()=>{document.body.classList.toggle('fullscreen-active',active());exitButton.hidden=!active();onResize();};
+ const fallback=()=>{stage.classList.add('immersive');update();};
+ button.onclick=async()=>{if(stage.requestFullscreen){try{await stage.requestFullscreen();update();return;}catch{/* iPhone can use the in-page immersive view. */}}fallback();};
+ exitButton.onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();stage.classList.remove('immersive');update();}catch(e){onError(e.message);}};
+ document.addEventListener('keydown',event=>{if(event.key==='Escape'&&stage.classList.contains('immersive')){stage.classList.remove('immersive');update();}});
  document.addEventListener('fullscreenchange',update);
  window.addEventListener('resize',onResize);
  window.visualViewport?.addEventListener('resize',onResize);

@@ -1,0 +1,7 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><base href="../"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prueba de fondo acuoso</title><link rel="stylesheet" href="style.css"><body><script type="module">
+import {createAtmosphere} from './atmosphere.js';import {createTitleTracking} from './title-tracking.js';
+const page=new DOMParser().parseFromString(await(await fetch('index.html')).text(),'text/html');
+document.body.replaceChildren(...[...page.body.children].filter(el=>!['SCRIPT','NOSCRIPT'].includes(el.tagName)));
+let open=false;const button=document.createElement('button');button.textContent='Simular boca abierta';document.querySelector('.menu-bar').append(button);button.onclick=()=>{open=!open;button.textContent=open?'Simular boca cerrada':'Simular boca abierta';};
+createAtmosphere(document.getElementById('atmosphere'),()=>({level:0,bass:0,treble:0}),()=>open);createTitleTracking(document.querySelector('h1'),()=>({level:0}));
+</script></body></html>

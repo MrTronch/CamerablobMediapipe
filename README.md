@@ -13,7 +13,7 @@ Sirve esta carpeta en un alojamiento HTTPS. Para GitHub Pages, sube su contenido
 ## Controles
 
 - Cámara: selector de dispositivos; Cambiar cámara alterna preferencia frontal/trasera.
-- Círculos/cuadrados, 4–40 blobs (20 por defecto), duración máxima de 2–6 segundos y ampliación máxima. Cada bloque recibe su propia duración al nacer: entre 2 y 3 s con el máximo inicial de 3 s; al reducir el máximo, el mínimo es máximo menos 3, con piso de 2 s. El cambio afecta a los nuevos bloques. Cada ventana amplía vídeo en vivo mientras envejece, y desaparece de golpe al terminar su duración, sin fade de salida.
+- Cuadrados por defecto; círculos y modo automático disponibles. 4–40 blobs (20 por defecto), duración máxima de 2–6 segundos y ampliación máxima. Cada bloque recibe su propia duración al nacer: entre 2 y 3 s con el máximo inicial de 3 s; al reducir el máximo, el mínimo es máximo menos 3, con piso de 2 s. El cambio afecta a los nuevos bloques. Cada ventana amplía vídeo en vivo mientras envejece, y desaparece de golpe al terminar su duración, sin fade de salida.
 - Gesto de paz: índice y medio extendidos, anular y meñique plegados. Invierte solamente las ventanas situadas sobre la mano que hace paz; las del rostro quedan intactas.
 - Boca abierta: quinto sample, con espera mínima de 3,5 segundos.
 - Actividad sonora: cada 300 ms se evalúan los bloques nacidos hace menos de 500 ms, con 65% de probabilidad y máximo dos disparos por ciclo. Cada bloque suena una sola vez; se barajan los cuatro samples para evitar repeticiones consecutivas. El quinto conserva el disparador de boca.
@@ -57,7 +57,7 @@ Cada inicio solicita frontal (sin recordar la trasera). El espejo sigue la orien
 
 Los cambios de cámara liberan el stream anterior, limpian bloques y memoria de movimiento y descartan resultados pendientes de otra sesión. Las primeras seis muestras de análisis estabilizan el detector. No se usan sensores ni se piden permisos adicionales de movimiento.
 
-Pantalla completa muestra únicamente el canvas y Salir. El canvas usa cover: no se deforma, pero puede recortar bordes para llenar el viewport. El vídeo, los blobs y las líneas se escalan juntos. Resize/orientación y entrada/salida de fullscreen reinician el análisis de movimiento. El botón requiere una sesión de cámara activa.
+Pantalla completa muestra únicamente el canvas y Salir. El canvas usa contain: conserva el encuadre completo y la proporción de la fuente, con bandas negras cuando el viewport tiene otra proporción. La vista normal adapta su contenedor a la proporción de la cámara. El vídeo, los blobs y las líneas se escalan juntos. Resize/orientación y entrada/salida de fullscreen reinician el análisis de movimiento. El botón requiere una sesión de cámara activa.
 
 El análisis de movimiento utiliza imágenes de 80×60 a intervalos de 120 ms, hasta 48 puntos texturados, búsqueda local de parches y consenso robusto de una transformación afín. Compara el movimiento residual después de compensar desplazamiento, rotación y escala leves. Ignora nuevos bordes, tolera un píxel de cuantización durante movimiento coherente y elimina cambios uniformes de brillo. Un movimiento brusco o cambio amplio vuelve a estabilizar. Se reutilizan dos buffers de luminancia; el render conserva su resolución. La referencia de fondo es el fotograma anterior, actualizado incluso durante estabilización; no existe un modelo persistente de escena.
 
@@ -86,3 +86,50 @@ En Chrome Android, comprobar con HTTPS: inicio frontal, trasera sin espejo, regr
 Límites del estimador: escena sin textura, desenfoque fuerte, paralaje de objetos cercanos, cambios de luz locales y una persona ocupando casi toda la imagen pueden confundirse con movimiento global. En cambios amplios se prioriza una pausa breve; puede omitir temporalmente movimiento real. Los landmarks de MediaPipe permanecen independientes de la compensación, pero la creación de todos los nuevos blobs se pausa durante estabilización. No se promete eliminación absoluta de falsos positivos.
 
 Archivos de esta revisión: modificados app.js, tracker.js, index.html, style.css y README.md; añadidos config.js, motion.js, presentation.js, tests/motion.test.mjs y tests/presentation.html. La carpeta 00 backup no se modifica. No se ha actualizado automáticamente GitHub Pages.
+
+La cámara ya no se detiene al ocultar la pestaña o cambiar de ventana. Detener, cerrar o recargar sí termina la sesión. Fondo negro y morado con contornos y ruido celular reactivos al audio de salida. El título usa ventanas de tracking y ampliación. Ver ACTUALIZAR-GITHUB.md para uso local y publicación.
+
+En desktop se solicita 1280×720 (16:9) a la cámara. El panel muestra la resolución recibida. El fondo renderiza a 640×360 y se suaviza con un desenfoque de 2 px. Las cuatro ventanas del título recorren todo el ancho.
+
+Abrir la boca activa además un ojo copiado en la frente con feedback de cinco segundos. El disparo usa histéresis: requiere cerrar la boca para volver a armarse y no prolonga el efecto por mantenerla abierta. Se limpia al detener o cambiar cámara/espejo. El fondo tiene bandas moradas más anchas y el título usa trayectorias aleatorias independientes.
+
+Feedback actualizado: genera recortes durante cinco segundos. Cada recorte es opaco, permanece fijo en sus coordenadas originales y se elimina individualmente a los cinco segundos de su creación. Por eso los últimos recortes pueden permanecer hasta cinco segundos después de terminar la emisión. Abrir la boca invierte únicamente los tonos negro/morado del fondo; cerrar la boca o perder el rostro restaura la paleta. Título con seis ventanas de tamaño y zoom variables; fondo de flujo acuoso.
+
+Pinza del rostro: junta pulgar e índice de una mano cerca de la cara para activar una copia del rostro. Separar los dedos en X/Y estira sus ejes de forma independiente. Se desactiva si se pierden los dedos, la mano o el rostro, o el seguimiento queda obsoleto. Los trazos duplican su grosor. Publicar también face-stretch.js. Prueba sintética: /tests/face-stretch.html.
+
+Actualización de precisión: el ojo se recorta del mismo bitmap que procesa MediaPipe y se centra con esquinas y párpados. Se solicita un sello cada 33 ms (la frecuencia real depende del dispositivo); cada sello permanece opaco y fijo durante 10 segundos. El blob de pinza se dibuja por encima de todos los efectos y comienza con ampliación 1,3×. Se amplió la tolerancia del gesto y admite pinzas de una o dos manos cerca del rostro. Trazos del video: 4 píxeles. Recarga la página para reiniciar también el worker.
+
+Ajuste actual: objetivo de captura del ojo 24 ms (la cadencia efectiva depende de cámara, análisis y pantalla). Blobs normales aproximadamente 30% más pequeños. Control Grosor: 1–10 px, paso 0,5. Dos manos abiertas en L con índices arriba y pulgares abajo definen el rectángulo de ampliación del rostro directamente; no necesitan pinza previa. La pinza individual sigue disponible.
+
+Corrección de compatibilidad MediaPipe: no se exige visibility > 0,4 en landmarks de manos/rostro, porque el conversor de Tasks Vision utiliza 0 cuando no se informa ese campo. Se validan las coordenadas y la presencia de las listas de detecciones. El indicador MARCO muestra manos detectadas, rostro y activación. La prueba de sesión reproduce visibility:0 de extremo a extremo y permite ocultar manos para confirmar la retirada.
+
+## Perfil optimizado actual
+- Captura solicitada: 960×540, 16:9 en escritorio, hasta 30 fps. Seguimiento: imágenes de 480 px de ancho.
+- Render de cámara y título: objetivo 30 fps. Rectángulo de manos interpolado con una constante de 70 ms entre resultados de MediaPipe.
+- Predeterminados: 8 blobs, ampliación 1,7×. El control permite hasta 24 blobs.
+- Fondo: generador 256×144 con 8 células, desenfoque de 6 px. Usa OffscreenCanvas en un worker cuando el navegador lo permite; evita encolar más de un fotograma de fondo.
+- Se reutilizan imágenes del ojo cuando no ha llegado un nuevo bitmap analizado; los recortes mantienen su duración y posición.
+- Publicar también atmosphere-field.js y atmosphere-worker.js junto con atmosphere.js.
+- Prueba de coste: /tests/performance.html. En la comparación local la mediana del generador pasó de 373,4 ms (640×360, 20 células) a 69,0 ms (perfil optimizado), un 81,5% menos. Estas cifras comparan el coste del fondo, no los FPS de una cámara real; dependen del equipo y de la carga concurrente.
+
+Filtro nuevo: blanco y negro + grano activado por defecto y desactivable en ajustes. El marco interpola con 48 ms y predicción limitada de 45 ms; se dibuja hasta 60 fps mientras está activo, manteniendo captura a 30 fps. Los fotogramas filtrados y las texturas de grano se reutilizan.
+
+Ajuste actual: filtro con contraste 1,35 y brillo 0,96; grosor inicial 1,5 px. El marco mantiene su referencia inicial y estira el rostro con la separación de los dedos en ambos ejes. Tolera pérdidas breves de hasta 450 ms sin reiniciarse y se retira cuando la pérdida persiste.
+
+Control de manos revisado: calibración fija en píxeles al activar, escala independiente X/Y sin renormalizar con el tamaño cambiante del rostro. Dos filtros de 70 ms aportan retardo suave (~140 ms), sin extrapolación ni saltos de modo. Retiene la última referencia durante 1200 ms de pérdida y luego se retira gradualmente en 300 ms. Al volver las manos antes de ese plazo, no recalibra. El indicador muestra escalas X/Y para confirmar la deformación.
+
+## Estado final: respuesta directa y revisión para iPhone
+Se retiraron los filtros temporales del marco: responde a la última detección sin retardo añadido. Se mantiene la retención ante pérdidas breves para reducir parpadeo. El tiempo de detección propio de MediaPipe sigue dependiendo del dispositivo.
+
+Safari/iPhone: video inline con playsinline y webkit-playsinline; filtro por píxeles a resolución reducida si canvas.filter no existe; conversión a ImageBitmap mediante canvas si las opciones de video se rechazan; vista ampliada dentro de la página si no se puede usar pantalla completa nativa.
+
+Se comprobaron 51 pruebas y tamaños de diseño 375×667, 393×852 y 852×393 sin desbordamiento. No se ejecutó Safari/WebKit ni una cámara física de iPhone en este entorno Windows. La validación final de cámara, audio y gestos debe hacerse en un iPhone.
+Para probarlo: publica el contenido de github, abre la URL HTTPS de GitHub Pages en Safari y concede el permiso de cámara. Una dirección localhost de esta computadora no apunta a este servidor desde el teléfono.
+Publica todos los archivos, incluido browser-compat.js.
+
+## Marco de manos: correspondencia directa
+El rectángulo de dos manos usa los dedos como bordes: izquierda/derecha a partir de los índices y pulgares de cada lado, arriba a partir de los índices y abajo a partir de los pulgares. Su ancho y alto son esas distancias en píxeles, sin factores de calibración del tamaño del rostro. La muestra más reciente se aplica de inmediato; entre muestras se usa predicción corta y acotada, sin una cola de suavizado con retardo. Las pérdidas breves conservan el efecto.
+
+El seguimiento de manos y el de rostro/pose corren en trabajadores distintos: una inferencia lenta de pose no bloquea la respuesta de las manos. Se intenta GPU para manos y se usa CPU si la inicialización GPU no está disponible. El worker de rostro no encola fotogramas y se actualiza a menor frecuencia. Publicar también tracking-bridge.js y el tracker.js actualizado.
+
+Verificado: 53 pruebas, geometría de dedos con cambios de tamaño del rostro y orden de manos, y modelos reales de MediaPipe detectando dos manos en la referencia local. La prueba de imagen estática no verifica la fluidez con una cámara física. Los archivos privados de work/ no forman parte de la copia github.
