@@ -61,3 +61,15 @@ test('two-hand rectangle stays tied to the fingertips through dropouts, swaps an
  s.update(pair(.65,.22),largerFace,650,1000,600);s.draw(ctx,source,650);assert.deepEqual(ctx.draws.at(-1).slice(5),drawn.slice(5));
  s.update([],null,700,1000,600);s.draw(ctx,source,1700);assert.equal(s.isActive(),true);s.draw(ctx,source,2200);assert.equal(s.isActive(),false);
 });
+test('uneven hand heights use the highest finger and lowest thumb instead of averaging the gaps',()=>{
+ const a=hand(),b=hand();a[8]={x:.25,y:.2};a[4]={x:.3,y:.4};b[8]={x:.75,y:.6};b[4]={x:.7,y:.8};
+ const s=createFaceStretch(),ctx=context(),source={width:1000,height:600};s.update([a,b],face(),100,1000,600);s.draw(ctx,source,100);
+ let rectangle=ctx.draws.at(-1);assert.ok(Math.abs(rectangle[6]-120)<1e-8);assert.ok(Math.abs(rectangle[8]-360)<1e-8);
+ b[8].y=.7;b[4].y=.9;s.update([b,a],face(),200,1000,600);s.draw(ctx,source,200);rectangle=ctx.draws.at(-1);assert.ok(Math.abs(rectangle[6]-120)<1e-8);assert.ok(Math.abs(rectangle[8]-420)<1e-8);
+});
+test('one-hand dropout keeps updating the visible hand edge without extending the full-pair timeout',()=>{
+ const a=hand(),b=hand();a[8]={x:.25,y:.2};a[4]={x:.3,y:.4};b[8]={x:.75,y:.6};b[4]={x:.7,y:.8};
+ const s=createFaceStretch(),ctx=context(),source={width:1000,height:600};s.update([a,b],face(),100,1000,600);s.draw(ctx,source,100);
+ a[8].y=.1;a[4].y=.3;s.update([a],face(),200,1000,600);s.draw(ctx,source,200);const r=ctx.draws.at(-1);assert.ok(Math.abs(r[6]-60)<1e-8);assert.ok(Math.abs(r[8]-420)<1e-8);
+ s.update([a],face(),1650,1000,600);s.draw(ctx,source,1700);assert.equal(s.isActive(),false);
+});

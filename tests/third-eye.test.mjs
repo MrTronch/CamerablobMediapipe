@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {MouthTrigger,EYE_DURATION,eyeGeometry,createThirdEye} from '../third-eye.js';
 import {createWanderer} from '../reactive.js';
 function face(open=true){const f=Array.from({length:468},()=>({x:.5,y:.5}));Object.assign(f,{10:{x:.5,y:.18},9:{x:.5,y:.32},159:{x:.39,y:.4},145:{x:.39,y:.44},33:{x:.35,y:.42},133:{x:.43,y:.42},263:{x:.65,y:.42},13:{x:.5,y:.6},14:{x:.5,y:open?.69:.61}});return f;}
-test('mouth opening is edge triggered with hysteresis and ten second lifetime',()=>{
- const gate=new MouthTrigger();assert.equal(EYE_DURATION,10000);assert.equal(gate.update(.3,100),true);assert.equal(gate.until,10100);
+test('mouth opening is edge triggered with hysteresis and five second lifetime',()=>{
+ const gate=new MouthTrigger();assert.equal(EYE_DURATION,5000);assert.equal(gate.update(.3,100),true);assert.equal(gate.until,5100);
  assert.equal(gate.update(.3,12000),false);gate.update(.09,12100);assert.equal(gate.update(.3,12200),true);
  gate.reset();assert.equal(gate.update(.3,13000,false),false);assert.equal(gate.update(.3,13100),true);
 });
@@ -13,16 +13,16 @@ test('forehead patch preserves geometry and source bounds for mirrored and tilte
  const mirror=f.map(p=>({...p,x:1-p.x}));assert.equal(eyeGeometry(mirror,1280,720).angle,0);
  f[263].y=.47;const a=eyeGeometry(f,1280,720).angle,b=eyeGeometry(f.map(p=>({...p,x:1-p.x})),1280,720).angle;assert.ok(Math.abs(a+b)<1e-10);
 });
-test('opaque stamps keep their frame positions and expire independently after ten seconds',()=>{
+test('opaque stamps keep their frame positions and are removed rapidly in order before the five-second sequence ends',()=>{
  const calls=[],transforms=[],alphas=[];const ctx={save(){},restore(){},translate(x,y){transforms.push([x,y]);},rotate(){},drawImage(...args){calls.push(args);},set globalAlpha(value){alphas.push(value);}};
  const eye=createThirdEye(()=>({getContext:()=>({drawImage(){}})}));
  eye.update(face(),100,1280,720);eye.draw(ctx,{},100);
  const original=transforms[0];const moved=face().map(p=>({...p,x:p.x+.05}));
  eye.update(moved,200,1280,720);eye.draw(ctx,{},200);
  assert.deepEqual(transforms[1],original);assert.notDeepEqual(transforms[2],original);assert.ok(alphas.every(a=>a===1));
- calls.length=0;transforms.length=0;eye.draw(ctx,{},10099);assert.equal(calls.length,2);assert.deepEqual(transforms[0],original);
- calls.length=0;transforms.length=0;eye.draw(ctx,{},10100);assert.equal(calls.length,1);assert.notDeepEqual(transforms[0],original);
- calls.length=0;eye.draw(ctx,{},10200);assert.equal(calls.length,0);
+ calls.length=0;transforms.length=0;eye.draw(ctx,{},4700);assert.equal(calls.length,2);assert.deepEqual(transforms[0],original);
+ calls.length=0;transforms.length=0;eye.draw(ctx,{},5000);assert.equal(calls.length,1);assert.notDeepEqual(transforms[0],original);
+ calls.length=0;eye.draw(ctx,{},5100);assert.equal(calls.length,0);
  eye.update(face(false),10300,1280,720);eye.update(face(),10400,1280,720);eye.reset();eye.draw(ctx,{},10500);assert.equal(calls.length,0);
 });
 test('mouth palette state follows opening, closing and loss of face tracking',()=>{
@@ -46,4 +46,18 @@ test('eye stamps use the synchronized analysis patch, mirror correctly and relea
  eye.update(face(),0,1280,720,true,analyzed,true);eye.draw(ctx,{},0);eye.draw(ctx,{},24);eye.draw(ctx,{},48);
  assert.equal(pixels.length,1);assert.ok(pixels.every(args=>args[0]===analyzed));assert.ok(scales.every(args=>args[0]===-1));
  eye.update(face(),100,1280,720,true,next,true);assert.equal(closed,1);eye.reset();assert.equal(closed,2);
+});
+import {visibleEyeStamps} from '../third-eye.js';
+test('opaque eye stamps are culled only when fully covered; partially exposed history is retained',()=>{
+ const a={x:100,y:100,width:40,height:20},b={...a},c={...a,x:110};assert.deepEqual(visibleEyeStamps([a,b]),[b]);assert.deepEqual(visibleEyeStamps([a,c]),[a,c]);assert.deepEqual(visibleEyeStamps([a,{...a,width:60,height:40}]).length,1);
+});
+test('eye creates a new stamp at the 12ms target interval',()=>{
+ const made=[];const eye=createThirdEye(()=>{const c={getContext:()=>({drawImage(){}})};made.push(c);return c;});const ctx={save(){},restore(){},translate(){},drawImage(){}};
+ eye.update(face(),0,1280,720);eye.draw(ctx,{},0);eye.draw(ctx,{},11);assert.equal(made.length,1);eye.draw(ctx,{},12);assert.equal(made.length,2);
+});
+import {EYE_SCALE} from '../third-eye.js';
+test('eye display dimensions are enlarged by 50 percent without enlarging the source crop',()=>{
+ const calls=[];const ctx={filter:'none',save(){},restore(){},translate(){},drawImage(...args){calls.push(args);}};
+ const eye=createThirdEye(()=>({getContext:()=>({drawImage(){}})}));const f=face(),g=eyeGeometry(f,1280,720);eye.update(f,0,1280,720);eye.draw(ctx,{},0,false);
+ assert.equal(EYE_SCALE,1.5);assert.equal(calls[0][3],g.width*1.5);assert.equal(calls[0][4],g.height*1.5);assert.equal(ctx.filter,'contrast(1.6)');
 });

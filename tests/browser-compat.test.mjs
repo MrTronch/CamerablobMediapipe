@@ -19,3 +19,8 @@ test('fullscreen uses an in-page view when the native API is missing',async()=>{
  setupPresentation({stage,button,exitButton:exit,onResize:()=>resized++,onError:message=>{throw Error(message);}});await button.onclick();assert.equal(stage.classList.contains('immersive'),true);assert.equal(exit.hidden,false);await exit.onclick();assert.equal(stage.classList.contains('immersive'),false);assert.equal(exit.hidden,true);assert.ok(resized>=2);
  }finally{globalThis.document=oldDocument;globalThis.window=oldWindow;}
 });
+test('portrait analysis bounds the longest side to 480 rather than allocating a tall full-width bitmap',async()=>{
+ const oldBitmap=globalThis.createImageBitmap,oldDocument=globalThis.document,calls=[];
+ try{globalThis.document={createElement:()=>({width:0,height:0,getContext:()=>({drawImage(){}})})};globalThis.createImageBitmap=async(...args)=>{calls.push(args);if(args.length>1)throw Error('Unsupported video options');return {};};await trackerBitmap({videoWidth:720,videoHeight:1280});const canvas=calls[1][0];assert.equal(canvas.width,270);assert.equal(canvas.height,480);
+ }finally{globalThis.createImageBitmap=oldBitmap;globalThis.document=oldDocument;}
+});

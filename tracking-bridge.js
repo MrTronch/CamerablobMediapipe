@@ -19,7 +19,7 @@ export class TrackingBridge{
   let eyePatch=null;
   if(cached?.eyePatch){try{eyePatch=await this.cloneBitmap(cached.eyePatch);}catch{}}
   if(this.closed){eyePatch?.close();return;}
-  this.onmessage?.({data:{...data,type:'result',faces:cached?.faces||[],poseWorld:cached?.poseWorld||[],poseImage:cached?.poseImage||[],eyePatch}});
+  this.onmessage?.({data:{...data,type:'result',faceTime:cached?.time,faces:cached?.faces||[],poseWorld:cached?.poseWorld||[],poseImage:cached?.poseImage||[],eyePatch}});
  }
  async postMessage(data){
   if(data.type==='init'){this.hand.postMessage({...data,mode:'hands'});this.face.postMessage({...data,mode:'face'});return;}

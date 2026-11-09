@@ -1,4 +1,6 @@
 import {audioFeatures} from './reactive.js';
+// One octave down for every sample, including the mouth-triggered voice.
+export const SAMPLE_OCTAVE_RATE=.5;
 export class Sampler{
  constructor(){this.buffers=[];this.voices=new Set();this.muted=false;this.openness=0;this.bag=[];this.lastSample=-1;}
  async unlock(){
@@ -24,7 +26,7 @@ export class Sampler{
   if(!this.ctx||this.ctx.state!=='running'||this.muted||!this.buffers[index]||this.voices.size>=12)return false;
   const p=parameters??{rate:1,mouthRate:1,reverb:.5,pan:0};
   const source=this.ctx.createBufferSource(),gain=this.ctx.createGain(),wet=this.ctx.createGain(),pan=this.ctx.createStereoPanner();
-  source.buffer=this.buffers[index];source.playbackRate.value=index===4?p.mouthRate:p.rate;
+  source.buffer=this.buffers[index];source.playbackRate.value=(index===4?p.mouthRate:p.rate)*SAMPLE_OCTAVE_RATE;
   const amount=index===4?Math.max(.5,p.reverb):p.reverb;
   gain.gain.value=.48/Math.sqrt(1+amount*.6);wet.gain.value=amount;pan.pan.value=p.pan*.65;
   source.connect(gain);gain.connect(pan);pan.connect(this.master);pan.connect(wet);wet.connect(this.reverb);

@@ -1,6 +1,7 @@
 let scratch;
 export async function trackerBitmap(video){
- const width=Math.min(video.videoWidth,480),height=Math.round(video.videoHeight*width/video.videoWidth);
+ const scale=Math.min(1,480/Math.max(video.videoWidth,video.videoHeight));
+ const width=Math.round(video.videoWidth*scale),height=Math.round(video.videoHeight*scale);
  try{return await createImageBitmap(video,{resizeWidth:width,resizeHeight:height});}
  catch{
   // Some WebKit versions reject video sources or resize options. Canvas is a

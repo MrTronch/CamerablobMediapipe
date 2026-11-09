@@ -5,11 +5,13 @@ import {clamp,isPeace,growth,crop,shouldInvert,randomLife,hasSpace,armOpenness,n
 import {Sampler} from './audio.js';
 import {trackerBitmap} from './browser-compat.js';
 import {TrackingBridge} from './tracking-bridge.js';
+import {invertOutside,createFrameTrail,drawFrameOutlines,clipOutsideFrames} from './compositing.js';
 import {createCameraFilter} from './camera-filter.js';
 const cameraFilter=createCameraFilter();
 import {createThirdEye} from './third-eye.js';
 import {createFaceStretch} from './face-stretch.js';
 const faceStretch=createFaceStretch();
+const frameTrail=createFrameTrail();
 const thirdEye=createThirdEye();
 import {createAtmosphere} from './atmosphere.js';
 import {createTitleTracking} from './title-tracking.js';
@@ -36,8 +38,8 @@ setMenu(true);
 $('menuToggle').onclick=()=>setMenu(!$('controls').hidden);
 
 $('mirror').onchange=()=>resetTracking();
-for(const [id,suffix] of [['count',''],['life',' s'],['zoom','×'],['density','%'],['volume','%'],['stroke',' px']])$(id).oninput=()=>{$(`${id}Value`).value=$(id).value+suffix;if(id==='volume')sampler.volume(+$(id).value/100);};
-function resetTracking(){lastVideoTime=-1;faceStretch.reset();thirdEye.reset();atmosphere.update([]);eyeCooldownUntil=0;busy=false;bodyImage=bodyWorld=null;bodyAt=0;autoShape={shape:'circle',until:performance.now()+5000+Math.random()*3000};blobs=[];points=[];resetMotionDetection();handCount=faceCount=0;handZones=[];lastResult=0;sampler.setOpenness(null);}
+for(const [id,suffix] of [['count',''],['life',' s'],['zoom','×'],['density','%'],['volume','%'],['stroke',' px'],['fisheye','%'],['copies','']])$(id).oninput=()=>{$(`${id}Value`).value=$(id).value+suffix;if(id==='volume')sampler.volume(+$(id).value/100);};
+function resetTracking(){lastVideoTime=-1;faceStretch.reset();frameTrail.reset();thirdEye.reset();atmosphere.update([]);eyeCooldownUntil=0;busy=false;bodyImage=bodyWorld=null;bodyAt=0;autoShape={shape:'circle',until:performance.now()+5000+Math.random()*3000};blobs=[];points=[];resetMotionDetection();handCount=faceCount=0;handZones=[];lastResult=0;sampler.setOpenness(null);}
 function startTracker(){
  return new Promise((resolve,reject)=>{
   cancelTracker=()=>reject(Error("Inicio cancelado."));
@@ -46,7 +48,7 @@ function startTracker(){
   worker.onmessage=({data})=>{if(data.type==='ready'){clearTimeout(timer);cancelTracker=null;ready=true;resolve();}else if(data.type==='error'){clearTimeout(timer);busy=false;ready=false;worker?.terminate();if(starting)reject(Error('No se pudo cargar el seguimiento: '+data.message));else status('El seguimiento falló. El modo de movimiento sigue activo. Detén y vuelve a iniciar.',true);}else if(data.type==='result'){
    if(!running||changingCamera||data.epoch!==session){data.eyePatch?.close();return;}busy=false;const now=performance.now();inferenceInterval=clamp((now-data.time)*.75,24,100);lastResult=now;bodyImage=data.poseImage?.[0];bodyWorld=data.poseWorld?.[0];bodyAt=now;sampler.setOpenness(armOpenness(data.poseWorld?.[0]));handCount=data.hands.length;faceCount=data.faces.length;points=[];handZones=[];
    faceStretch.update(data.hands.map(h=>h.map(displayPoint)),data.faces[0]?.map(displayPoint),now,video.videoWidth,video.videoHeight);
-   thirdEye.update(data.faces[0]?.map(displayPoint),now,video.videoWidth,video.videoHeight,!detector.blocked,data.eyePatch,$('mirror').checked);
+   thirdEye.update(data.faces[0]?.map(displayPoint),now,video.videoWidth,video.videoHeight,!detector.blocked,data.eyePatch,$('mirror').checked,data.faceTime);
    for(const hand of data.hands){const displayed=hand.map(displayPoint);const xs=displayed.map(p=>p.x),ys=displayed.map(p=>p.y);handZones.push({left:Math.min(...xs)-.035,right:Math.max(...xs)+.035,top:Math.min(...ys)-.035,bottom:Math.max(...ys)+.035,peace:isPeace(hand)});for(const i of [0,8,12])points.push({x:hand[i].x,y:hand[i].y,kind:'hand',part:i===0?'wrist':'finger',soundX:hand[0].x,soundY:hand[0].y});} 
    for(const f of data.faces){for(const [anchor,a,b] of [['eye-left',33,133],['eye-right',263,362],['mouth',13,14],['mouth-left',61,61],['mouth-right',291,291],['cheek-left',234,234],['cheek-right',454,454],['nose',1,1]])points.push({x:(f[a].x+f[b].x)/2,y:(f[a].y+f[b].y)/2,kind:'face',anchor,part:['eye-left','eye-right','mouth'].includes(anchor)?'primary-face':'secondary-face'});const mouth=Math.hypot(f[13].x-f[14].x,f[13].y-f[14].y)/Math.max(.001,Math.hypot(f[33].x-f[263].x,f[33].y-f[263].y));if(!detector.blocked&&mouth>.18&&now-lastMouth>3500){const p=displayPoint({...f[13],kind:"face"});sampler.play(4,soundParameters(p));lastMouth=now;}}
    if(bodyImage)for(const i of [11,12,13,14,23,24]){const p=bodyImage[i];if(p&&p.visibility>.65)points.push({x:p.x,y:p.y,kind:'body',part:'body',poseIndex:i,anchor:`body-${i}`});}
@@ -128,7 +130,7 @@ function movement(now){
  lastMotion=now;return result;
 }
 function frame(now){
- if(!running)return;requestAnimationFrame(frame);if(now-lastFrame<(faceStretch.isActive()?14:30))return;if(changingCamera||video.readyState<2)return;
+ if(!running)return;requestAnimationFrame(frame);if(now-lastFrame<((faceStretch.isActive()||thirdEye.isEmitting(now))?14:30))return;if(changingCamera||video.readyState<2)return;
  const w=video.videoWidth,h=video.videoHeight;if(!w||!h)return;
  const stage=document.querySelector('.stage');stage.classList.add('camera-active');stage.style.setProperty('--camera-ratio',String(w/h));
  if(source.width!==w||source.height!==h){source.width=canvas.width=w;source.height=canvas.height=h;$('cameraResolution').value=`${w} × ${h}`;resetMotionDetection();}
@@ -158,11 +160,19 @@ function frame(now){
  const stageRect=canvas.getBoundingClientRect();
  atmosphere.update(blobs.map(b=>containPoint(b,w,h,stageRect,innerWidth,innerHeight)).filter(Boolean));
  ctx.strokeStyle='#23f415';ctx.lineWidth=+$('stroke').value;
- if($('lines').checked&&blobs.length>1){ctx.globalAlpha=.5;ctx.beginPath();blobs.forEach((b,i)=>i?ctx.lineTo(b.x*w,b.y*h):ctx.moveTo(b.x*w,b.y*h));ctx.stroke();ctx.globalAlpha=1;}
- for(const b of blobs){const g=growth((now-b.born)/1000,b.life,blobZoom(b,+$('zoom').value));const r=g.radius*Math.min(w,h)/480,x=clamp(b.x*w,r,w-r),y=clamp(b.y*h,r,h-r);const c=crop(b.x*w,b.y*h,r,g.zoom,w,h);ctx.save();ctx.globalAlpha=g.alpha;ctx.beginPath();if(activeShape==='circle')ctx.arc(x,y,r,0,Math.PI*2);else ctx.rect(x-r,y-r,r*2,r*2);ctx.save();ctx.clip();ctx.drawImage(visualSource,c.x,c.y,c.side,c.side,x-r,y-r,r*2,r*2);if(shouldInvert(b,handZones)){ctx.globalCompositeOperation='difference';ctx.fillStyle='white';ctx.fillRect(x-r,y-r,r*2,r*2);}ctx.restore();ctx.stroke();ctx.restore();}
- thirdEye.draw(ctx,visualSource,now,filtered);
- faceStretch.draw(ctx,visualSource,now,+$('stroke').value);
+ for(const b of blobs){const g=growth((now-b.born)/1000,b.life,blobZoom(b,+$('zoom').value));const r=g.radius*Math.min(w,h)/480,x=clamp(b.x*w,r,w-r),y=clamp(b.y*h,r,h-r);const c=crop(b.x*w,b.y*h,r,g.zoom,w,h);ctx.save();ctx.globalAlpha=g.alpha;ctx.beginPath();if(activeShape==='circle')ctx.arc(x,y,r,0,Math.PI*2);else ctx.rect(x-r,y-r,r*2,r*2);ctx.save();ctx.clip();ctx.drawImage(visualSource,c.x,c.y,c.side,c.side,x-r,y-r,r*2,r*2);if(shouldInvert(b,handZones)){ctx.globalCompositeOperation='difference';ctx.fillStyle='white';ctx.fillRect(x-r,y-r,r*2,r*2);}ctx.restore();ctx.restore();}
+ const frameRectangle=faceStretch.draw(ctx,visualSource,now,0);
+ const frameCopies=frameTrail.draw(ctx,visualSource,frameRectangle,now,+$('fisheye').value/100,sourceRevision+':'+filtered,+$('copies').value);
+ invertOutside(ctx,w,h,frameRectangle,+$('stroke').value);
  cameraFilter.grain(ctx,w,h,now,filtered);
+ ctx.save();clipOutsideFrames(ctx,w,h,frameCopies);
+ ctx.strokeStyle='#23f415';ctx.lineWidth=+$('stroke').value;
+ if($('lines').checked&&blobs.length>1){ctx.globalAlpha=.5;ctx.beginPath();blobs.forEach((b,i)=>i?ctx.lineTo(b.x*w,b.y*h):ctx.moveTo(b.x*w,b.y*h));ctx.stroke();ctx.globalAlpha=1;}
+ for(const b of blobs){const g=growth((now-b.born)/1000,b.life,blobZoom(b,+$('zoom').value));const r=g.radius*Math.min(w,h)/480,x=clamp(b.x*w,r,w-r),y=clamp(b.y*h,r,h-r);ctx.save();ctx.globalAlpha=g.alpha;ctx.beginPath();if(activeShape==='circle')ctx.arc(x,y,r,0,Math.PI*2);else ctx.rect(x-r,y-r,r*2,r*2);ctx.stroke();ctx.restore();}
+ ctx.restore();
+ drawFrameOutlines(ctx,frameCopies,+$('stroke').value);
+
+ thirdEye.draw(ctx,visualSource,now,filtered);
  const stretchScale=faceStretch.scale();
  const frameLabel=`MARCO · ${handCount}/2 MANOS · ${faceCount?'ROSTRO OK':'SIN ROSTRO'} · ${faceStretch.isActive()?`ACTIVO · X ${stretchScale.x.toFixed(2)}× · Y ${stretchScale.y.toFixed(2)}×`:'FORMA EL MARCO'}`;
  if($('frameStatus').textContent!==frameLabel)$('frameStatus').textContent=frameLabel;

@@ -20,19 +20,25 @@ export const FRAME_HOLD_MS=1200;
 export const FRAME_RELEASE_MS=300;
 export function createFaceStretch(){
  let active=false,mode=null,base=null,control=null,region=null,faceSeen=-Infinity,updated=-Infinity;
+ let lastPair=null,lastCompletePair=-Infinity;
  let display=null,crop1=null,previous=null,velocity={x:0,y:0,dx:0,dy:0};
- function reset(){active=false;mode=base=control=region=display=crop1=null;faceSeen=updated=-Infinity;previous=null;velocity={x:0,y:0,dx:0,dy:0};}
+ function reset(){active=false;mode=base=control=region=display=crop1=null;faceSeen=updated=-Infinity;lastPair=null;lastCompletePair=-Infinity;previous=null;velocity={x:0,y:0,dx:0,dy:0};}
  function update(hands,face,now,width,height){
   const detected=faceRegion(face,width,height);
   if(detected){region=detected;faceSeen=now;}
   const box=region;
   if(!box||(!active&&!detected))return;
   const singles=hands.map(h=>pinchControl(h,width,height)).filter(Boolean);
-  let pair=null;
-  if(singles.length>=2){
-   const [a,b]=singles;
+  let pair=null,frameHands=singles;
+  if(singles.length>=2){lastPair=[...singles];lastCompletePair=now;}
+  else if(active&&mode==='pair'&&singles.length===1&&lastPair&&now-lastCompletePair<FRAME_HOLD_MS){
+   const current=singles[0];const index=Math.hypot(current.x-lastPair[0].x,current.y-lastPair[0].y)<=Math.hypot(current.x-lastPair[1].x,current.y-lastPair[1].y)?0:1;
+   lastPair=[...lastPair];lastPair[index]=current;frameHands=lastPair;
+  }
+  if(frameHands.length>=2){
+   const [a,b]=frameHands;
    const left=(Math.min(a.index.x,b.index.x)+Math.min(a.thumb.x,b.thumb.x))/2,right=(Math.max(a.index.x,b.index.x)+Math.max(a.thumb.x,b.thumb.x))/2;
-   const top=(a.index.y+b.index.y)/2,bottom=(a.thumb.y+b.thumb.y)/2;
+   const top=Math.min(a.index.y,b.index.y,a.thumb.y,b.thumb.y),bottom=Math.max(a.index.y,b.index.y,a.thumb.y,b.thumb.y);
    const dx=right-left,dy=Math.abs(bottom-top);
    pair={kind:'pair',x:(left+right)/2,y:(top+bottom)/2,dx,dy,
     thumb:{x:(a.x<b.x?a:b).thumb.x,y:(a.thumb.y+b.thumb.y)/2},
@@ -57,18 +63,18 @@ export function createFaceStretch(){
    active=true;mode=next.kind;
    base={dx:next.dx,dy:next.dy,w:box.w*1.3,h:box.h*1.3,refX:Math.max(next.dx,box.w*.2),refY:Math.max(next.dy,box.h*.15)};
   }
-  if(previous&&previous.kind===next.kind&&now>updated){const dt=Math.max(16,now-updated);for(const key of ['x','y','dx','dy'])velocity[key]=(next[key]-previous[key])/dt;}
+  if(previous&&previous.kind===next.kind&&now>updated){const dt=Math.max(16,now-updated);for(const key of ['x','y','dx','dy'])velocity[key]=velocity[key]*.6+(next[key]-previous[key])/dt*.4;}
   else velocity={x:0,y:0,dx:0,dy:0};
   control=next;previous={...next};updated=now;
  }
  function draw(ctx,source,now,stroke=1.5){
   if(!active)return;
-  const missing=now-updated;
+  const missing=now-(mode==='pair'?lastCompletePair:updated);
   if(missing>=FRAME_HOLD_MS+FRAME_RELEASE_MS){reset();return;}
   // At every detector result the rectangle exactly matches the fingertips.
   // Between results, short bounded prediction fills the display frames without
   // introducing a delayed smoothing buffer. Freeze during a tracking dropout.
-  const horizon=mode==='pair'?Math.min(missing,45):0;
+  const horizon=mode==='pair'?Math.min(now-updated,45):0;
   const current={...control};
   for(const key of ['x','y','dx','dy'])current[key]+=clamp(velocity[key]*horizon,-region.w*.07,region.w*.07);
   const sx=clamp(1+(current.dx-base.dx)/base.refX,.25,2.8),sy=clamp(1+(current.dy-base.dy)/base.refY,.25,2.8);
@@ -79,7 +85,8 @@ export function createFaceStretch(){
   display={...target};crop1={x:region.x,y:region.y,w:region.w,h:region.h};
   ctx.save();ctx.globalAlpha=missing<=FRAME_HOLD_MS?1:clamp(1-(missing-FRAME_HOLD_MS)/FRAME_RELEASE_MS,0,1);
   ctx.drawImage(source,crop1.x,crop1.y,crop1.w,crop1.h,display.x,display.y,display.w,display.h);
-  ctx.strokeStyle='#23f415';ctx.lineWidth=stroke;ctx.strokeRect(display.x,display.y,display.w,display.h);ctx.restore();
+  if(stroke>0){ctx.strokeStyle='#23f415';ctx.lineWidth=stroke;ctx.strokeRect(display.x,display.y,display.w,display.h);}ctx.restore();
+  return {...display,source:{...crop1},opacity:missing<=FRAME_HOLD_MS?1:clamp(1-(missing-FRAME_HOLD_MS)/FRAME_RELEASE_MS,0,1)};
  }
  return {update,draw,reset,isActive(){return active;},scale(){return display&&base?{x:display.w/base.w,y:display.h/base.h}:{x:1,y:1};}};
 }

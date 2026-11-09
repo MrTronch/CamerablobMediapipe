@@ -1,6 +1,8 @@
-import {monochromePixels} from './camera-filter.js';
+import {contrastPixels} from './camera-filter.js';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-export const EYE_DURATION=10000;
+export const EYE_DURATION=5000;
+export const EYE_SCALE=1.5;
+export const EYE_CLEAR_MS=350;
 export function eyeGeometry(face,width,height){
  if(!face?.[263]||!face[10]||!face[9])return null;
  const a=face[33],b=face[133],upper=face[159]??a,lower=face[145]??b;
@@ -28,43 +30,58 @@ export class MouthTrigger{
 }
 export function createThirdEye(makeCanvas=()=>document.createElement('canvas')){
  const trigger=new MouthTrigger();
- let until=0,geometry=null,faceAt=0,lastStamp=-Infinity,trail=[],trackedPatch=null,mirror=false,lastCapturedPatch=null,filterSupport=null,grayCache=new WeakMap();
- function reset(){trackedPatch?.close?.();trackedPatch=null;lastCapturedPatch=null;grayCache=new WeakMap();trigger.reset();until=0;geometry=null;faceAt=0;lastStamp=-Infinity;trail=[];}
- function update(face,now,width,height,enabled=true,patch=null,mirrored=false){
-  trackedPatch?.close?.();trackedPatch=patch;mirror=mirrored;
+ let until=0,geometry=null,faceAt=0,lastStamp=-Infinity,trail=[],trackedPatch=null,mirror=false,lastCapturedPatch=null,patchKey=null,filterSupport=null,grayCache=new WeakMap(),colorCache=new WeakMap(),releaseTrail=null;
+ function reset(){trackedPatch?.close?.();trackedPatch=null;lastCapturedPatch=null;grayCache=new WeakMap();colorCache=new WeakMap();releaseTrail=null;trigger.reset();until=0;geometry=null;faceAt=0;lastStamp=-Infinity;trail=[];}
+ function update(face,now,width,height,enabled=true,patch=null,mirrored=false,frameKey=null){
+  trackedPatch?.close?.();trackedPatch=patch;mirror=mirrored;patchKey=frameKey??patch;
   if(!face){geometry=null;trigger.open=false;return;}
   geometry=eyeGeometry(face,width,height);faceAt=now;
-  if(trigger.update(mouthRatio(face),now,enabled)&&geometry){until=now+EYE_DURATION;lastStamp=-Infinity;}
+  if(trigger.update(mouthRatio(face),now,enabled)&&geometry){until=now+EYE_DURATION;lastStamp=-Infinity;trail=[];releaseTrail=null;}
  }
  function draw(ctx,source,now,monochrome=false){
-  trail=trail.filter(stamp=>now-stamp.born<EYE_DURATION);
-  if(now>=until&&!trail.length)return;
-  if(now<until&&geometry&&now-faceAt<650&&now-lastStamp>=24){
+  if(now>=until){trail=[];releaseTrail=null;return;}
+  if(now>=until-EYE_CLEAR_MS){
+   releaseTrail??=trail.slice();
+   const progress=(now-(until-EYE_CLEAR_MS))/EYE_CLEAR_MS;
+   trail=releaseTrail.slice(Math.floor(progress*releaseTrail.length));
+  }
+  if(now<until-EYE_CLEAR_MS&&geometry&&now-faceAt<650&&now-lastStamp>=12){
    const previous=trail.at(-1);
-   const reused=trackedPatch&&trackedPatch===lastCapturedPatch&&previous;
+   const reused=trackedPatch&&patchKey===lastCapturedPatch&&previous;
    const patch=reused?previous.patch:makeCanvas();
    if(!reused){patch.width=128;patch.height=90;
    const pc=patch.getContext('2d');
    if(trackedPatch){pc.save();if(mirror){pc.translate(128,0);pc.scale(-1,1);}pc.drawImage(trackedPatch,0,0,128,90);pc.restore();}
    else pc.drawImage(source,geometry.sx,geometry.sy,geometry.sw,geometry.sh,0,0,128,90);
    }
-   lastCapturedPatch=trackedPatch;trail.push({patch,...geometry,born:now});lastStamp=now;
+   lastCapturedPatch=patchKey;trail.push({patch,...geometry,width:geometry.width*EYE_SCALE,height:geometry.height*EYE_SCALE,born:now});lastStamp=now;
    if(trail.length>420)trail.shift();
   }
   if(filterSupport===null)filterSupport=typeof ctx.filter==='string';
-  ctx.save();ctx.globalAlpha=1;if(filterSupport)ctx.filter=monochrome?'grayscale(1)':'none';
-  for(const stamp of trail){
+  ctx.save();ctx.globalAlpha=1;if(filterSupport)ctx.filter=monochrome?'grayscale(1) contrast(1.6)':'contrast(1.6)';
+  for(const stamp of visibleEyeStamps(trail)){
    // Each opaque stamp stays at its original frame coordinates and size.
    ctx.save();ctx.translate(stamp.x,stamp.y);
    let image=stamp.patch;
-   if(monochrome&&!filterSupport){
-    if(!grayCache.has(image)){const copy=makeCanvas();copy.width=image.width;copy.height=image.height;const cc=copy.getContext('2d');cc.drawImage(image,0,0);if(cc.getImageData){const pixels=cc.getImageData(0,0,copy.width,copy.height);monochromePixels(pixels.data);cc.putImageData(pixels,0,0);}grayCache.set(image,copy);}
-    image=grayCache.get(image);
+   if(!filterSupport&&image.getContext?.('2d')?.getImageData){
+    const cache=monochrome?grayCache:colorCache;
+    if(!cache.has(image)){const copy=makeCanvas();copy.width=image.width;copy.height=image.height;const cc=copy.getContext('2d');cc.drawImage(image,0,0);if(cc.getImageData){const pixels=cc.getImageData(0,0,copy.width,copy.height);contrastPixels(pixels.data,1.6,monochrome);cc.putImageData(pixels,0,0);}cache.set(image,copy);}
+    image=cache.get(image);
    }
    ctx.drawImage(image,-stamp.width/2,-stamp.height/2,stamp.width,stamp.height);
    ctx.restore();
   }
   ctx.restore();
  }
- return {update,draw,reset,isMouthOpen(now){return !!geometry&&now-faceAt<650&&trigger.open;}};
+ return {update,draw,reset,isEmitting(now){return now<until;},isMouthOpen(now){return !!geometry&&now-faceAt<650&&trigger.open;}};
+}
+
+// Opaque stamps completely hidden by a newer one do not need draw calls.
+// Keep the history for ordered retirement; this only culls rendering.
+export function visibleEyeStamps(trail){
+ const visible=[];
+ for(let i=trail.length-1;i>=0;i--){const s=trail[i];
+  if(!visible.some(n=>n.x-n.width/2<=s.x-s.width/2&&n.y-n.height/2<=s.y-s.height/2&&n.x+n.width/2>=s.x+s.width/2&&n.y+n.height/2>=s.y+s.height/2))visible.push(s);
+ }
+ return visible.reverse();
 }

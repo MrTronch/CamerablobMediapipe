@@ -133,3 +133,28 @@ El rectángulo de dos manos usa los dedos como bordes: izquierda/derecha a parti
 El seguimiento de manos y el de rostro/pose corren en trabajadores distintos: una inferencia lenta de pose no bloquea la respuesta de las manos. Se intenta GPU para manos y se usa CPU si la inicialización GPU no está disponible. El worker de rostro no encola fotogramas y se actualiza a menor frecuencia. Publicar también tracking-bridge.js y el tracker.js actualizado.
 
 Verificado: 53 pruebas, geometría de dedos con cambios de tamaño del rostro y orden de manos, y modelos reales de MediaPipe detectando dos manos en la referencia local. La prueba de imagen estática no verifica la fluidez con una cámara física. Los archivos privados de work/ no forman parte de la copia github.
+
+Ajuste vertical: arriba/abajo son los extremos de las cuatro puntas de pulgares e índices, sin promediar las alturas de las manos. Si se pierde brevemente una mano, la visible continúa ajustando su lado y la oculta conserva su última posición; el tiempo de retirada se sigue midiendo desde la última pareja completa. La velocidad estimada se estabiliza sin añadir una cola de retardo a las posiciones. Análisis móvil limitado a 480 px por el lado más largo.
+Ojo: intervalo objetivo de 12 ms, cada recorte dura 10 segundos. Se reutilizan imágenes de la misma inferencia facial y no se dibujan sellos totalmente cubiertos por otros opacos. La captura efectiva queda limitada por cámara, inferencia y refresco de pantalla.
+
+Capas actuales: ojos con escala 1,5× y contraste 1,6, opacos y dibujados al final por encima de todo. Al activarse el marco, únicamente la zona exterior de la imagen de cámara usa negativo (255−R, 255−G, 255−B); en blanco y negro se invierte su luminancia. El interior y el borde del marco se conservan. No afecta al fondo de la página ni al ojo superpuesto. Publicar también compositing.js. Prueba visual sintética: tests/layers.html.
+
+
+## Ajuste actual: ojos y marco en cascada
+La secuencia completa de ojos dura 5 segundos. Los recortes permanecen opacos y fijos; durante los últimos 350 ms se eliminan del más antiguo al más reciente. El marco de los dedos conserva su escala y añade 7 copias escalonadas detrás (8 cuadros en total), persistentes mientras el marco esté activo.
+
+
+## Corrección del rastro por movimiento
+Sustituye la cascada de desplazamientos fijos: ahora se conservan hasta 8 capturas opacas del marco en sus posiciones y escalas reales. Se capturan al moverse, como máximo cada 40 ms; las nuevas reemplazan las más antiguas. El rastro se limpia cuando termina el marco. Las imágenes se invierten fuera del rectángulo actual; todos los trazos verdes se dibujan después de esa inversión y los ojos encima de todo.
+
+
+## Rastro actual: 14 capturas
+El marco conserva 14 capturas históricas, además del cuadro vivo, con un intervalo mínimo de 100 ms entre capturas durante el movimiento. Las líneas y bordes de otros blobs quedan ocultos detrás de todos los cuadros. Los bordes de las copias antiguas también quedan ocultos por los cuadros más recientes. El seguimiento del cuadro vivo mantiene su cadencia independiente.
+
+
+## Ojo de pez del rostro
+En Editar, Ojo de pez · rostro regula la intensidad de 0 a 100%, con 25% inicial. A 0% se desactiva. Solo afecta al rostro del marco de las manos y a las nuevas capturas de su rastro; las capturas anteriores permanecen congeladas. El mapa se procesa a un máximo de 256 px por lado, con interpolación bilineal y caché por imagen/intensidad para limitar el coste.
+
+
+## Valores finales
+Ojo de pez del rostro: slider 0–20%, valor inicial 8%. Copias del rostro: slider 0–48, valor inicial 24; 0 elimina el rastro conservando el marco vivo, y bajar el valor elimina inmediatamente las capturas sobrantes. Intervalo entre capturas: 100 ms durante el movimiento. Todos los samples, incluido el de la boca, se reproducen una octava más grave (playbackRate × 0.5).
