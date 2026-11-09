@@ -111,3 +111,7 @@ El volumen del theremín ahora tiene ganancia máxima 2× (+6 dB) al 100%; el va
 
 ## Mezcla independiente: samples y theremín
 El antiguo Volumen general ahora se llama Volumen samples y solo controla los cinco samples y sus ecos. Volumen theremín controla únicamente su voz, ruido y reverb. Ambos inician al 65%; poner samples a 0 no silencia el theremín. El botón de silencio sigue silenciando toda la mezcla. El theremín tiene ahora ganancia máxima 4× (antes 2×) y ya no queda atenuado por el slider de samples.
+
+
+## Theremín pentatónico y oleaje suave
+La escala actual es pentatónica mayor de Si: Si, Do♯, Re♯, Fa♯ y Sol♯, repetida de Si2 a Si7 (26 notas). Sustituye el cromatismo anterior. El oleaje usa ruido coloreado estéreo sin mezcla directa de ruido blanco, filtrado grave y crecidas amplias dentro de un bucle de 16 segundos. Su filtro es independiente del cutoff musical y evita pasar por la saturación del theremín. Conserva el control de volumen independiente y la reverb de 5 segundos por separación de manos.

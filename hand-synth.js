@@ -1,13 +1,13 @@
-// Chromatic theremin-style voice, B2–B7. Vertical position selects semitones.
-export const CHROMATIC_MIDI=Array.from({length:61},(_,i)=>47+i);
+// Major pentatonic theremin, B2–B7. Vertical position selects scale degrees.
+export const PENTATONIC_MIDI=Array.from({length:26},(_,i)=>47+Math.floor(i/5)*12+[0,2,4,7,9][i%5]);
 const clamp=v=>Math.max(0,Math.min(1,v));
 export function frameSound(rect,width,height,previous=-1){
  if(!rect||width<=0||height<=0)return null;
- const x=clamp((rect.x+rect.w/2)/width),y=clamp((rect.y+rect.h/2)/height),position=(1-y)*CHROMATIC_MIDI.length;
- let degree=Math.min(CHROMATIC_MIDI.length-1,Math.floor(position));
+ const x=clamp((rect.x+rect.w/2)/width),y=clamp((rect.y+rect.h/2)/height),position=(1-y)*PENTATONIC_MIDI.length;
+ let degree=Math.min(PENTATONIC_MIDI.length-1,Math.floor(position));
  if(previous>=0&&position>=previous-.12&&position<previous+1.12)degree=previous;
  const spread=clamp(rect.w/width);
- return {degree,frequency:440*2**((CHROMATIC_MIDI[degree]-69)/12),cutoff:700*(7000/700)**x,q:.65,gain:.018*(rect.opacity??1),wet:.55+1.25*spread**1.2,pan:(x-.5)*.6};
+ return {degree,frequency:440*2**((PENTATONIC_MIDI[degree]-69)/12),cutoff:700*(7000/700)**x,q:.65,gain:.018*(rect.opacity??1),wet:.55+1.25*spread**1.2,pan:(x-.5)*.6};
 }
 // Sine-led theremin, quiet upper harmonic, vibrato and filtered breath noise.
 // Dedicated long stereo convolution space; no runtime library.
@@ -19,14 +19,22 @@ export function roomImpulse(ctx){
  }
  return buffer;
 }
-// Colored noise with a slow surf swell; an 8-second loop has faded seams.
+// Stereo surf: low/mid colored turbulence, broad irregular swells, no raw hiss.
 export function surfBuffer(ctx){
- const n=ctx.sampleRate*8,buffer=ctx.createBuffer(1,n,ctx.sampleRate),data=buffer.getChannelData(0);let seed=1209,low=0;
- for(let i=0;i<n;i++){
-  seed=(seed*1664525+1013904223)>>>0;const white=seed/2147483648-1;low=low*.92+white*.08;
-  const phase=i/n*Math.PI*2,swell=.25+.75*((1-Math.cos(phase))*.5)**1.5;
-  const seam=Math.min(1,i/(ctx.sampleRate*.015),(n-1-i)/(ctx.sampleRate*.015));
-  data[i]=(low*2+white*.18)*swell*seam;
+ const n=ctx.sampleRate*16,buffer=ctx.createBuffer(2,n,ctx.sampleRate);
+ const lowA=Math.exp(-2*Math.PI*110/ctx.sampleRate),midA=Math.exp(-2*Math.PI*700/ctx.sampleRate);
+ for(let channel=0;channel<2;channel++){
+  const data=buffer.getChannelData(channel);let seed=1209+channel*1709,low=0,mid=0;
+  for(let i=0;i<n;i++){
+   seed=(seed*1664525+1013904223)>>>0;const white=seed/2147483648-1;
+   low=lowA*low+(1-lowA)*white;mid=midA*mid+(1-midA)*white;
+   const t=i/ctx.sampleRate,phase=(t%8)/8;
+   // A broad crest recedes slowly; the second wave has a different strength.
+   const wave=Math.sin(Math.PI*phase)**2;
+   const swell=.035+.965*wave**1.3*(.85+.15*Math.cos(Math.PI*t/8));
+   const seam=Math.min(1,i/(ctx.sampleRate*.08),(n-1-i)/(ctx.sampleRate*.08));
+   data[i]=seam===0?0:(low*3+mid*.45)*swell*seam;
+  }
  }
  return buffer;
 }
@@ -41,11 +49,11 @@ export class HandSynth{
   this.vibratoDepth=ctx.createGain();this.vibratoDepth.gain.value=9;this.vibrato.connect(this.vibratoDepth);
   for(const {osc} of this.oscillators)this.vibratoDepth.connect(osc.detune);this.vibrato.start();
   this.noise=ctx.createBufferSource();this.noise.buffer=surfBuffer(ctx);this.noise.loop=true;
-  this.noiseFilter=ctx.createBiquadFilter();this.noiseFilter.type='lowpass';this.noiseFilter.frequency.value=1800;this.noiseFilter.Q.value=.45;
-  this.noiseGain=ctx.createGain();this.noiseGain.gain.value=.18;
+  this.noiseFilter=ctx.createBiquadFilter();this.noiseFilter.type='lowpass';this.noiseFilter.frequency.value=750;this.noiseFilter.Q.value=.45;
+  this.noiseGain=ctx.createGain();this.noiseGain.gain.value=.28;
   this.surfMotion=ctx.createOscillator();this.surfMotion.type='sine';this.surfMotion.frequency.value=.125;
-  this.surfDepth=ctx.createGain();this.surfDepth.gain.value=1050;this.surfMotion.connect(this.surfDepth);this.surfDepth.connect(this.noiseFilter.frequency);this.surfMotion.start();
-  this.noise.connect(this.noiseFilter);this.noiseFilter.connect(this.noiseGain);this.noiseGain.connect(this.filter);this.noise.start();
+  this.surfDepth=ctx.createGain();this.surfDepth.gain.value=400;this.surfMotion.connect(this.surfDepth);this.surfDepth.connect(this.noiseFilter.frequency);this.surfMotion.start();
+  this.noise.connect(this.noiseFilter);this.noiseFilter.connect(this.noiseGain);this.noiseGain.connect(this.amp);this.noise.start();
   this.saturator=ctx.createWaveShaper();const curve=new Float32Array(1024);for(let i=0;i<curve.length;i++){const x=i/(curve.length-1)*2-1;curve[i]=Math.tanh(x*1.3)/Math.tanh(1.3);}this.saturator.curve=curve;
   this.room=ctx.createConvolver();this.room.buffer=roomImpulse(ctx);this.roomGain=ctx.createGain();this.roomGain.gain.value=0;
   this.roomTone=ctx.createBiquadFilter();this.roomTone.type='lowpass';this.roomTone.frequency.value=4200;
