@@ -8,9 +8,21 @@ function skeleton(){const w=Array.from({length:33},()=>({x:0,y:0,z:0,visibility:
  test('sin esqueleto fiable no utiliza límites de pantalla',()=>{assert.equal(bodyAudio({x:1,y:1},null,null),null);const {w,image}=skeleton();image[15].visibility=.2;assert.equal(bodyAudio({x:1,y:1},image,w),null);});
  test('los cuatro samples aparecen sin repeticiones consecutivas',()=>{const s=new Sampler();const a=Array.from({length:40},()=>s.nextSample());for(let i=0;i<a.length;i+=4)assert.equal(new Set(a.slice(i,i+4)).size,4);for(let i=1;i<a.length;i++)assert.notEqual(a[i],a[i-1]);});
 
-test('all sample playback rates are shifted exactly one octave down',()=>{
+test('ambient samples remain low while the roar is one octave higher than its previous version',()=>{
  const rates=[];const sampler=new Sampler(),node=()=>({gain:{},pan:{},connect(){},disconnect(){}});
  sampler.ctx={state:'running',createBufferSource(){const s={playbackRate:{},connect(){},start(){rates.push(this.playbackRate.value);}};return s;},createGain:node,createStereoPanner:node};sampler.buffers=[{},null,null,null,{}];
  sampler.play(0,{rate:2,mouthRate:1.5,reverb:0,pan:0});sampler.play(4,{rate:2,mouthRate:1.5,reverb:0,pan:0});
- assert.equal(SAMPLE_OCTAVE_RATE,.5);assert.deepEqual(rates,[1,.75]);
+ assert.equal(SAMPLE_OCTAVE_RATE,.5);assert.deepEqual(rates,[1,1.5]);
+});
+
+test('theremin volume defaults to 65 percent, is independent of samples and smoothly mutes its full output',()=>{
+ const sampler=new Sampler(),changes=[];assert.equal(sampler.thereminLevel,.65);sampler.thereminVolume(.4);assert.equal(sampler.thereminLevel,.4);
+ sampler.ctx={currentTime:3};sampler.master={gain:{value:.65}};sampler.thereminBus={gain:{setTargetAtTime(...a){changes.push(a);}}};sampler.thereminVolume(0);assert.deepEqual(changes.at(-1),[0,3,.03]);assert.equal(sampler.master.gain.value,.65);sampler.thereminVolume(2);assert.equal(sampler.thereminLevel,1);assert.deepEqual(changes.at(-1),[4,3,.03]);sampler.thereminVolume(.65);assert.deepEqual(changes.at(-1),[2.6,3,.03]);
+});
+
+test('samples volume controls only its own bus including reverb; global mute preserves both faders',()=>{
+ const sampler=new Sampler(),samples=[],master=[],theremin=[];sampler.ctx={currentTime:2};sampler.sampleBus={gain:{setTargetAtTime(...a){samples.push(a);}}};sampler.master={gain:{setTargetAtTime(...a){master.push(a);}}};sampler.thereminBus={gain:{setTargetAtTime(...a){theremin.push(a);}}};
+ sampler.volume(0);assert.deepEqual(samples.at(-1),[0,2,.03]);assert.deepEqual(master.at(-1),[1,2,.03]);assert.equal(theremin.length,0);assert.equal(sampler.thereminLevel,.65);
+ sampler.thereminVolume(1);assert.deepEqual(theremin.at(-1),[4,2,.03]);assert.equal(sampler.sampleLevel,0);
+ sampler.muted=true;sampler.volume(.4);assert.deepEqual(master.at(-1),[0,2,.03]);sampler.muted=false;sampler.volume(.4);assert.deepEqual(master.at(-1),[1,2,.03]);assert.equal(sampler.thereminLevel,1);
 });

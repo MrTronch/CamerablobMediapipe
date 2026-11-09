@@ -38,8 +38,8 @@ setMenu(true);
 $('menuToggle').onclick=()=>setMenu(!$('controls').hidden);
 
 $('mirror').onchange=()=>resetTracking();
-for(const [id,suffix] of [['count',''],['life',' s'],['zoom','×'],['density','%'],['volume','%'],['stroke',' px'],['fisheye','%'],['copies','']])$(id).oninput=()=>{$(`${id}Value`).value=$(id).value+suffix;if(id==='volume')sampler.volume(+$(id).value/100);};
-function resetTracking(){lastVideoTime=-1;faceStretch.reset();frameTrail.reset();thirdEye.reset();atmosphere.update([]);eyeCooldownUntil=0;busy=false;bodyImage=bodyWorld=null;bodyAt=0;autoShape={shape:'circle',until:performance.now()+5000+Math.random()*3000};blobs=[];points=[];resetMotionDetection();handCount=faceCount=0;handZones=[];lastResult=0;sampler.setOpenness(null);}
+for(const [id,suffix] of [['count',''],['life',' s'],['zoom','×'],['density','%'],['volume','%'],['thereminVolume','%'],['stroke',' px'],['fisheye','%'],['copies','']])$(id).oninput=()=>{$(`${id}Value`).value=$(id).value+suffix;if(id==='volume')sampler.volume(+$(id).value/100);if(id==='thereminVolume')sampler.thereminVolume(+$(id).value/100);};
+function resetTracking(){sampler.handFrame(null,1,1);lastVideoTime=-1;faceStretch.reset();frameTrail.reset();thirdEye.reset();atmosphere.update([]);eyeCooldownUntil=0;busy=false;bodyImage=bodyWorld=null;bodyAt=0;autoShape={shape:'circle',until:performance.now()+5000+Math.random()*3000};blobs=[];points=[];resetMotionDetection();handCount=faceCount=0;handZones=[];lastResult=0;sampler.setOpenness(null);}
 function startTracker(){
  return new Promise((resolve,reject)=>{
   cancelTracker=()=>reject(Error("Inicio cancelado."));
@@ -162,6 +162,7 @@ function frame(now){
  ctx.strokeStyle='#23f415';ctx.lineWidth=+$('stroke').value;
  for(const b of blobs){const g=growth((now-b.born)/1000,b.life,blobZoom(b,+$('zoom').value));const r=g.radius*Math.min(w,h)/480,x=clamp(b.x*w,r,w-r),y=clamp(b.y*h,r,h-r);const c=crop(b.x*w,b.y*h,r,g.zoom,w,h);ctx.save();ctx.globalAlpha=g.alpha;ctx.beginPath();if(activeShape==='circle')ctx.arc(x,y,r,0,Math.PI*2);else ctx.rect(x-r,y-r,r*2,r*2);ctx.save();ctx.clip();ctx.drawImage(visualSource,c.x,c.y,c.side,c.side,x-r,y-r,r*2,r*2);if(shouldInvert(b,handZones)){ctx.globalCompositeOperation='difference';ctx.fillStyle='white';ctx.fillRect(x-r,y-r,r*2,r*2);}ctx.restore();ctx.restore();}
  const frameRectangle=faceStretch.draw(ctx,visualSource,now,0);
+ sampler.handFrame(frameRectangle,w,h);
  const frameCopies=frameTrail.draw(ctx,visualSource,frameRectangle,now,+$('fisheye').value/100,sourceRevision+':'+filtered,+$('copies').value);
  invertOutside(ctx,w,h,frameRectangle,+$('stroke').value);
  cameraFilter.grain(ctx,w,h,now,filtered);

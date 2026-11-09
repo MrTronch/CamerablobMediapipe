@@ -1,4 +1,12 @@
-# Blob Tracking Cámara
+# Blob Trackin Camera
+
+**BY MR TRONCH**
+
+## 🟢 Abrir la web
+
+### [👉 mrtronch.github.io/CamerablobMediapipe](https://mrtronch.github.io/CamerablobMediapipe/)
+
+Pulsa **Iniciar cámara y sonido**, permite el acceso a la cámara y utiliza el panel de edición para ajustar los efectos.
 
 Instrumento audiovisual para navegador, adaptado del proyecto Python con OpenCV, MediaPipe y Pygame. Cámara, ventanas de ampliación progresiva y cinco samples originales.
 
@@ -158,3 +166,51 @@ En Editar, Ojo de pez · rostro regula la intensidad de 0 a 100%, con 25% inicia
 
 ## Valores finales
 Ojo de pez del rostro: slider 0–20%, valor inicial 8%. Copias del rostro: slider 0–48, valor inicial 24; 0 elimina el rastro conservando el marco vivo, y bajar el valor elimina inmediatamente las capturas sobrantes. Intervalo entre capturas: 100 ms durante el movimiento. Todos los samples, incluido el de la boca, se reproducen una octava más grave (playbackRate × 0.5).
+
+
+## Oscilador del marco y rugido
+
+El marco controlado con las manos activa un oscilador con entradas y salidas suaves. Solo suena el marco vivo; las copias del rastro no generan voces adicionales. Respeta volumen, silencio y detener.
+
+- **X (centro horizontal):** notas cuantizadas en una aproximación occidental de pélog degung, Si–Do–Re–Fa♯–Sol, entre Si2 y Si4. Una pequeña histéresis evita cambios de nota por temblores en los límites.
+- **Y (centro vertical):** frecuencia de corte de un filtro pasa bajos, aproximadamente 180–8000 Hz; al subir se abre el filtro.
+- **Ancho:** resonancia del filtro.
+- **Alto:** intensidad del oscilador.
+- **Rugido de la boca:** una octava más agudo que en la versión anterior. Los otros cuatro samples mantienen su registro grave.
+
+Referencia musical: [Pusaka Sunda — pélog degung](https://pusakasunda.org/about/). Se usa una aproximación en temperamento occidental, no la afinación medida de un gamelán concreto.
+
+
+## Sinte del marco: controles actuales
+
+- **Vertical:** nota en pélog degung, de Si1 a Si5 (cuatro octavas). Arriba más agudo, abajo más grave. Se mantiene la aproximación occidental de Si–Do–Re–Fa♯–Sol.
+- **Horizontal:** cutoff del filtro, de 220 a 10000 Hz.
+- **Separación horizontal entre las manos:** cantidad de reverb estéreo; manos más separadas producen más ambiente. Se utiliza el ancho del marco, sin cambiar su seguimiento.
+- **Volumen del sinte:** nivel de voz reducido a 0.022 antes del volumen general. El rugido y los otros samples conservan sus ajustes previos.
+- **Timbre:** dos sierras desafinadas ±5 cents, subgrave triangular, filtro pasa bajos de 24 dB/octava, saturación suave y reverb estéreo de convolución con cola de 2.2 s. La voz reutiliza los mismos tres osciladores y suaviza los cambios de parámetros. Detener corta tanto la voz como su retorno de reverb.
+
+Recursos gratuitos consultados: [WebAudio TinySynth](https://github.com/g200kg/webaudio-tinysynth) y [WEB-Synth](https://github.com/rijt/WEB-Synth). Se consultaron como referencias; esta implementación es propia sobre Web Audio nativo, sin copiar ni incorporar sus motores o dependencias.
+
+
+## Sonido actual: theremín cromático con ruido
+
+Este ajuste sustituye la anterior escala degung del marco por **49 notas cromáticas de Si1 a Si5** (cuatro octavas). El centro vertical selecciona la nota, arriba más aguda, con portamento corto e histéresis para reducir temblores. El centro horizontal controla el cutoff.
+
+El timbre combina una senoide principal, un armónico triangular discreto, vibrato de 5.2 Hz / ±9 cents y una capa de ruido filtrado. El nivel de voz se mantiene bajo, a 0.018 antes del volumen general.
+
+La reverb estéreo utiliza una cola de 5 segundos y una mezcla mucho más presente: separar horizontalmente las manos aumenta su retorno de 0.55 a 1.8. La señal seca se reduce a 0.75 para dar más protagonismo al ambiente. Al perder el marco, la voz se apaga suavemente y queda la cola; Detener corta también el retorno de reverb. El rugido conserva su ajuste anterior.
+
+
+## Theremín: registro más agudo y oleaje
+El rango cromático actual es Si2–Si7 (61 notas, cinco octavas): se transpuso el registro anterior una octava arriba y se añadió otra octava al extremo superior. La posición vertical sigue seleccionando las notas. El ruido ahora es coloreado, con envolvente de oleaje lento de 8 segundos, uniones suavizadas y un filtro que se abre y cierra lentamente. Conserva el volumen moderado y la reverb estéreo de 5 segundos controlada por la separación de las manos.
+
+
+## Volumen independiente del theremín
+El panel Editar incluye Volumen theremín, de 0 a 100%, con 65% inicial. Controla la voz, el ruido de oleaje y su retorno de reverb sin cambiar el volumen del rugido ni los demás samples. A 0% silencia toda esa salida. El control Volumen general continúa afectando a todo el audio. Los cambios de ganancia se suavizan para evitar saltos.
+
+
+El volumen del theremín ahora tiene ganancia máxima 2× (+6 dB) al 100%; el valor inicial del slider sigue siendo 65%. Se aplica a su voz, ruido y reverb; los demás sonidos conservan su nivel.
+
+
+## Mezcla independiente: samples y theremín
+El antiguo Volumen general ahora se llama Volumen samples y solo controla los cinco samples y sus ecos. Volumen theremín controla únicamente su voz, ruido y reverb. Ambos inician al 65%; poner samples a 0 no silencia el theremín. El botón de silencio sigue silenciando toda la mezcla. El theremín tiene ahora ganancia máxima 4× (antes 2×) y ya no queda atenuado por el slider de samples.
